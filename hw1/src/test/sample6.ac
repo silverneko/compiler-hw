@@ -1,0 +1,19 @@
+i a
+f fbc
+i ihc
+i b
+i c
+i d
+i e
+i h
+i g
+a = 1
+b = 2
+c = 3
+d = 4
+e = 5
+h = 2
+
+g = a + b * c + d * e / h
+
+p g
