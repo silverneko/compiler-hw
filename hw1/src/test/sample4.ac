@@ -1,2 +1,13 @@
+f a
+f b
+f c
+i d
+
 a = 5 + 3.2
 b = 3.5
+d = 12
+c = b + d
+
+p a
+p b
+p c

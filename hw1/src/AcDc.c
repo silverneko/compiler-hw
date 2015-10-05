@@ -3,7 +3,91 @@
 #include <ctype.h>
 #include <string.h>
 #include "header.h"
+
+#include <assert.h>
 #include "hash.h"
+
+Expression* foldConstant_(Expression * expr){
+  if(expr == NULL) return NULL;
+  switch(expr->v.type){
+    case Identifier:
+    case IntConst:
+    case FloatConst:
+      return expr;
+  }
+  expr->leftOperand = foldConstant_(expr->leftOperand);
+  expr->rightOperand = foldConstant_(expr->rightOperand);
+  Expression * lchild = expr->leftOperand;
+  Expression * rchild = expr->rightOperand;
+  if(expr->v.type == IntToFloatConvertNode){
+    if(lchild->v.type == IntConst){
+      Expression * new_expr = calloc(1, sizeof(Expression));
+      new_expr->type = Float;
+      new_expr->v.type = FloatConst;
+      new_expr->v.val.fvalue = (float)lchild->v.val.ivalue;
+      return new_expr;
+    }
+    return expr;
+  }
+  assert(lchild != NULL && rchild != NULL);
+  if(lchild->v.type == IntConst && rchild->v.type == IntConst){
+    Expression * new_expr = calloc(1, sizeof(Expression));
+    new_expr->type = Int;
+    new_expr->v.type = IntConst;
+    switch(expr->v.type){
+      case PlusNode:
+        new_expr->v.val.ivalue = lchild->v.val.ivalue + rchild->v.val.ivalue;
+        break;
+      case MinusNode:
+        new_expr->v.val.ivalue = lchild->v.val.ivalue - rchild->v.val.ivalue;
+        break;
+      case MulNode:
+        new_expr->v.val.ivalue = lchild->v.val.ivalue * rchild->v.val.ivalue;
+        break;
+      case DivNode:
+        new_expr->v.val.ivalue = lchild->v.val.ivalue / rchild->v.val.ivalue;
+        break;
+      default:
+        printf("error\n");
+        exit(1);
+    }
+    return new_expr;
+  }
+  if(lchild->v.type == FloatConst && rchild->v.type == FloatConst){
+    Expression * new_expr = calloc(1, sizeof(Expression));
+    new_expr->type = Float;
+    new_expr->v.type = FloatConst;
+    switch(expr->v.type){
+      case PlusNode:
+        new_expr->v.val.fvalue = lchild->v.val.fvalue + rchild->v.val.fvalue;
+        break;
+      case MinusNode:
+        new_expr->v.val.fvalue = lchild->v.val.fvalue - rchild->v.val.fvalue;
+        break;
+      case MulNode:
+        new_expr->v.val.fvalue = lchild->v.val.fvalue * rchild->v.val.fvalue;
+        break;
+      case DivNode:
+        new_expr->v.val.fvalue = lchild->v.val.fvalue / rchild->v.val.fvalue;
+        break;
+      default:
+        printf("error\n");
+        exit(1);
+    }
+    return new_expr;
+  }
+  return expr;
+}
+
+void foldConstant(Statements * stmts){
+  if(stmts == NULL) return ;
+  Statement * stmt = &stmts->first;
+  if(stmt->type == Assignment){
+    stmt->stmt.assign.expr = foldConstant_(stmt->stmt.assign.expr);
+  }
+  //print_expr(stmt->stmt.assign.expr); printf("\n");
+  return foldConstant(stmts->rest);
+}
 
 
 int main( int argc, char *argv[] )
@@ -29,6 +113,7 @@ int main( int argc, char *argv[] )
             fclose(source);
             symtab = build(program);
             check(&program, &symtab);
+            foldConstant(program.statements);
             gencode(program, target);
         }
     }
@@ -227,7 +312,7 @@ Expression *parseValue( FILE *source )
     switch(token.type){
         case Alphabet:
             (value->v).type = Identifier;
-            strcpy((value->v).val.id, token.tok);
+            (value->v).val.id = 'a' + hash(token.tok);
             break;
         case IntValue:
             (value->v).type = IntConst;
@@ -354,7 +439,7 @@ Statement parseStatement( FILE *source, Token token )
             if(next_token.type == AssignmentOp){
                 value = parseValue(source);
                 expr = parseExpression(source, value);
-                return makeAssignmentNode(token.tok[0], value, expr);
+                return makeAssignmentNode('a' + hash(token.tok), value, expr);
             }
             else{
                 printf("Syntax Error: Expect an assignment op %s\n", next_token.tok);
@@ -363,7 +448,7 @@ Statement parseStatement( FILE *source, Token token )
         case PrintOp:
             next_token = scanner(source);
             if(next_token.type == Alphabet)
-                return makePrintNode(next_token.tok[0]);
+                return makePrintNode('a' + hash(next_token.tok));
             else{
                 printf("Syntax Error: Expect an identifier %s\n", next_token.tok);
                 exit(1);
@@ -375,8 +460,7 @@ Statement parseStatement( FILE *source, Token token )
     }
 }
 
-Expression* fixExpressionPrecedence(Expression* expr)
-{
+Expression* fixExpressionPrecedence(Expression * expr){
   if(expr == NULL)
     return NULL;
   expr->leftOperand = fixExpressionPrecedence(expr->leftOperand);
@@ -414,9 +498,9 @@ Statements *parseStatements( FILE * source )
              * need to fix operator precedence
              */
             if(stmt.type == Assignment){
-              stmt.stmt.assign.expr
-                = fixExpressionPrecedence(stmt.stmt.assign.expr);
+              stmt.stmt.assign.expr = fixExpressionPrecedence(stmt.stmt.assign.expr);
             }
+
 
             stmts = parseStatements(source);
             return makeStatementTree(stmt , stmts);
@@ -446,8 +530,7 @@ Declaration makeDeclarationNode( Token declare_type, Token identifier )
         default:
             break;
     }
-    // tree_node.name = identifier.tok[0];
-    strcpy(tree_node.name, identifier.tok);
+    tree_node.name = 'a' + hash(identifier.tok);
 
     return tree_node;
 }
@@ -519,12 +602,11 @@ void InitializeTable( SymbolTable *table )
         table->table[i] = Notype;
 }
 
-void add_table( SymbolTable *table, char *s, DataType t )
+void add_table( SymbolTable *table, char c, DataType t )
 {
-    // int index = (int)(c - 'a');
-    int index = hash(s);
+    int index = (int)(c - 'a');
     if(table->table[index] != Notype)
-        printf("Error : id %s has been declared\n", s);//error
+        printf("Error : id %c has been declared\n", c);//error
     table->table[index] = t;
 }
 
@@ -587,9 +669,9 @@ DataType generalize( Expression *left, Expression *right )
     return Int;
 }
 
-DataType lookup_table( SymbolTable *table, char *s )
+DataType lookup_table( SymbolTable *table, char c )
 {
-    int id = hash(s);
+    int id = (int)(c - 'a');
     if( table->table[id] != Int && table->table[id] != Float)
         printf("Error : identifier %c is not declared\n", c);//error
     return table->table[id];
@@ -673,6 +755,12 @@ void fprint_op( FILE *target, ValueType op )
             break;
         case PlusNode:
             fprintf(target,"+\n");
+            break;
+        case MulNode:
+            fprintf(target,"*\n");
+            break;
+        case DivNode:
+            fprintf(target,"/\n");
             break;
         default:
             fprintf(target,"Error in fprintf_op ValueType = %d\n",op);
@@ -807,7 +895,7 @@ void test_parser( FILE *source )
             printf("i ");
         if(decl.type == Float)
             printf("f ");
-        printf("%s ",decl.name);
+        printf("%c ",decl.name);
         printf("\n");
         decls = decls->rest;
     }

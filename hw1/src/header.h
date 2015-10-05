@@ -38,7 +38,7 @@ typedef struct Token{
 /* For decl production or say one declaration statement */
 typedef struct Declaration{
     DataType type;
-    char name[70];
+    char name;
 }Declaration;
 
 /* 
@@ -56,7 +56,7 @@ typedef struct Declarations{
 typedef struct Value{
     ValueType type;
     union{
-        char id[70];                   /* if the node represent the access of the identifier */
+        char id;                   /* if the node represent the access of the identifier */
         Operation op;              /* store +, -, *, /, =, type_convert */
         int ivalue;                /* for integer constant in the expression */
         float fvalue;              /* for float constant */
@@ -79,7 +79,7 @@ typedef struct Expression{
 
 /* For one assignment statement */
 typedef struct AssignmentStatement{
-    char id[70];
+    char id;
     Expression *expr;
     DataType type;      /* For type checking to store the type of all expression on the right. */
 }AssignmentStatement;
@@ -89,7 +89,7 @@ typedef struct AssignmentStatement{
 typedef struct Statement{
     StmtType type;
     union{
-        char variable[70];              /* print statement */
+        char variable;              /* print statement */
         AssignmentStatement assign;
     }stmt;
 }Statement;
@@ -128,11 +128,11 @@ Statement parseStatement( FILE *source, Token token );
 Statements *parseStatements( FILE * source );
 Program parser( FILE *source );
 void InitializeTable( SymbolTable *table );
-void add_table( SymbolTable *table, char*, DataType t );
+void add_table( SymbolTable *table, char, DataType t );
 SymbolTable build( Program program );
 void convertType( Expression * old, DataType type );
 DataType generalize( Expression *left, Expression *right );
-DataType lookup_table( SymbolTable *table, char* c );
+DataType lookup_table( SymbolTable *table, char c );
 void checkexpression( Expression * expr, SymbolTable * table );
 void checkstmt( Statement *stmt, SymbolTable * table );
 void check( Program *program, SymbolTable * table);
