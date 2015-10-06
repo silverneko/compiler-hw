@@ -2,8 +2,11 @@ i aaabgb
 i bbgbg
 f cbgbg
 f dbger
+f a
 
 aaabgb = 1 / 2
 cbgbg = 1.0 / 2
 dbger = 1 / 2
+a=1.0 a
+=1.2
 

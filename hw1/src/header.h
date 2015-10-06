@@ -142,6 +142,6 @@ void gencode( Program prog, FILE * target );
 
 void print_expr( Expression *expr );
 void test_parser( FILE *source );
-void ungets(char *s, FILE * target);
+void ungetToken(Token);
 
 #endif // HEADER_H_INCLUDED

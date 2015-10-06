@@ -166,8 +166,17 @@ Token getNumericToken( FILE *source, char c )
     return token;
 }
 
+Token _tokens[1000];
+int _tokenCount = 0;
+
 Token scanner( FILE *source )
 {
+    // Keep a buffer of tokens
+    if(_tokenCount > 0){
+      --_tokenCount;
+      return _tokens[_tokenCount];
+    }
+
     char c;
     Token token;
 
@@ -196,15 +205,26 @@ Token scanner( FILE *source )
               return token;
             }else{
               int i = 1;
-              while(i < 70){
+              while(i < 69){
                 c2 = fgetc(source);
-                if(isspace(c2)){
-                  ungetc(c2, source);
+
+                /*
+                // EOF ??
+                if(c2 == EOF){
                   break;
                 }
+
+                if(isspace(c2)){
+                  // ungetc(c2, source);
+                  break;
+                }
+                */
+
                 if(! islower(c2)){
-                  printf("Invalid character : %c\n", c2);
-                  exit(1);
+                  //printf("Invalid character : %c\n", c2);
+                  //exit(1);
+                  ungetc(c2, source);
+                  break;
                 }
                 token.tok[i] = c2;
                 ++i;
@@ -270,13 +290,9 @@ Declaration parseDeclaration( FILE *source, Token token )
     }
 }
 
-void ungets(char *s, FILE *target){
-  char *e = s;
-  while((*e) != '\0') ++e;
-  while(s != e){
-    --e;
-    ungetc(*e, target);
-  }
+void ungetToken(Token token){
+  _tokens[_tokenCount] = token;
+  ++_tokenCount;
 }
 
 Declarations *parseDeclarations( FILE *source )
@@ -292,8 +308,7 @@ Declarations *parseDeclarations( FILE *source )
             return makeDeclarationTree( decl, decls );
         case PrintOp:
         case Alphabet:
-            // ungetc(token.tok[0], source);
-            ungets(token.tok, source);
+            ungetToken(token);
             return NULL;
         case EOFsymbol:
             return NULL;
@@ -365,8 +380,7 @@ Expression *parseExpressionTail( FILE *source, Expression *lvalue )
             expr->rightOperand = parseValue(source);
             return parseExpressionTail(source, expr);
         case Alphabet:
-            // ungetc(token.tok[0], source);
-            ungets(token.tok, source);
+            ungetToken(token);
             return lvalue;
         case PrintOp:
             ungetc(token.tok[0], source);
@@ -414,8 +428,7 @@ Expression *parseExpression( FILE *source, Expression *lvalue )
             expr->rightOperand = parseValue(source);
             return parseExpressionTail(source, expr);
         case Alphabet:
-            // ungetc(token.tok[0], source);
-            ungets(token.tok, source);
+            ungetToken(token);
             return NULL;
         case PrintOp:
             ungetc(token.tok[0], source);
