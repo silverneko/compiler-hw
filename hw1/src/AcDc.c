@@ -193,7 +193,7 @@ Token scanner( FILE *source )
         if( islower(c) ){
             char c2 = fgetc(source);
             ungetc(c2, source);
-            if(isspace(c2)){
+            if(! islower(c2)){
               if( c == 'f' )
                   token.type = FloatDeclaration;
               else if( c == 'i' )
@@ -205,21 +205,8 @@ Token scanner( FILE *source )
               return token;
             }else{
               int i = 1;
-              while(i < 69){
+              while(i < 100){
                 c2 = fgetc(source);
-
-                /*
-                // EOF ??
-                if(c2 == EOF){
-                  break;
-                }
-
-                if(isspace(c2)){
-                  // ungetc(c2, source);
-                  break;
-                }
-                */
-
                 if(! islower(c2)){
                   //printf("Invalid character : %c\n", c2);
                   //exit(1);
@@ -380,10 +367,8 @@ Expression *parseExpressionTail( FILE *source, Expression *lvalue )
             expr->rightOperand = parseValue(source);
             return parseExpressionTail(source, expr);
         case Alphabet:
-            ungetToken(token);
-            return lvalue;
         case PrintOp:
-            ungetc(token.tok[0], source);
+            ungetToken(token);
             return lvalue;
         case EOFsymbol:
             return lvalue;
@@ -428,10 +413,8 @@ Expression *parseExpression( FILE *source, Expression *lvalue )
             expr->rightOperand = parseValue(source);
             return parseExpressionTail(source, expr);
         case Alphabet:
-            ungetToken(token);
-            return NULL;
         case PrintOp:
-            ungetc(token.tok[0], source);
+            ungetToken(token);
             return NULL;
         case EOFsymbol:
             return NULL;
