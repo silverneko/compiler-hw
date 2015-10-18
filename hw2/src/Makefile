@@ -16,6 +16,9 @@ lex.yy.o: lex.yy.c
 lex.yy.c: lexer.l
 	$(LEX) $(LIB) lexer.l
 
+test: scanner
+	cat ../test/test.c | ./scanner
+
 clean:
 	rm -f $(TARGET) $(OBJECT) 
 

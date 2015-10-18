@@ -20,6 +20,13 @@ int main()
     func(c,e);
 	write(d);
 	d = 0;  /* 3: this is /* the end ***/
-	
+	/* string literal*/
+        "string literal///\\\\   	";
+        0.0;
+        0.;
+        .0;
+        0;
+        123e+1;
+        -123e-2;
     return 0;
 }

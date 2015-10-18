@@ -24,6 +24,14 @@ ID	 {letter}({letter}|{digit}|"_")*
 WS	 [ \t]+
 Int_constant {digit}+
 
+Float_constant [+-]?(({digit}+\.?{digit}*)|({digit}*\.{digit}+))([eE][+-]?{digit}+)?
+
+String_constant \"[^"]*\"
+comment \/\*([^*]|[ \n\t\r]|((\*)+([^\/*]|[ \n\t\r])))*(\*)*\*\/
+
+
+RWInt {Int_constant}
+RWFloat {Float_constant}
 /* You need to define the following RE's 
 Float_constant
 String_constant
@@ -46,12 +54,30 @@ DL_comma  ","
 DL_semicol ";"
 DL_dot  "."
 
+DL_lsqbracket "["
+DL_rsqbracket "]"
+
+OP_plus "+"
+OP_minus "-"
+OP_mult "*"
+OP_div "/"
+OP_lt "<"
+OP_gt ">"
+OP_lte "<="
+OP_gte ">="
+OP_eq "=="
+OP_neq "!="
+OP_and "&&"
+OP_not "!"
+
 /* Other separators appear here */
 
 error    .
 
 %%
 
+{comment}       {printf("%s\n", yytext);}
+{String_constant} {}
 {WS}            {}
 {RWInt}         {/* return INT; */ }
 {RWFloat}       {/* return FLOAT; */}
@@ -71,8 +97,26 @@ error    .
 {DL_rbrace}     /* return MK_RBRACE; */
 {DL_comma}      {}
 {DL_semicol}    {}
+
+{DL_dot}    {}
+{DL_lsqbracket} {}
+{DL_rsqbracket} {}
+
+{OP_plus} {}
+{OP_minus} {}
+{OP_mult} {}
+{OP_div} {}
+{OP_lt} {}
+{OP_gt} {}
+{OP_lte} {}
+{OP_gte} {}
+{OP_eq} {}
+{OP_neq} {}
+{OP_and} {}
+{OP_not} {}
+
 {newline}       linenumber += 1;
-{error}         printf("ERR \n");/* return ERROR; */
+{error}         printf("ERR: %s\n", yytext);/* return ERROR; */
 
 
 %%
