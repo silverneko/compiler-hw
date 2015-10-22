@@ -22,6 +22,8 @@ int main()
 	d = 0;  /* 3: this is /* the end ***/
 	/* string literal*/
         "string literal///\\\\   	";
+        "aaaa\"\"\"\\\\\"\"\\"
+        "\\"
         0.0;
         0.;
         .0;
