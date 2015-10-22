@@ -5,8 +5,7 @@
 int linenumber;
 symtab * lookup();
 symtab * ptr;
-void     insertID();
-void 	 printSymTab();
+
 /* You need to define for all tokens in C--, here are some examples */
 #define INT		10
 #define FLOAT 		11 
@@ -30,8 +29,8 @@ String_constant \"[^"]*\"
 comment \/\*([^*]|[ \n\t\r]|((\*)+([^\/*]|[ \n\t\r])))*(\*)*\*\/
 
 
-RWInt {Int_constant}
-RWFloat {Float_constant}
+RWInt "int"
+RWFloat "float"
 /* You need to define the following RE's 
 Float_constant
 String_constant
@@ -78,6 +77,8 @@ error    .
 
 {comment}       {printf("%s\n", yytext);}
 {String_constant} {}
+{Int_constant} {}
+{Float_constant} {}
 {WS}            {}
 {RWInt}         {/* return INT; */ }
 {RWFloat}       {/* return FLOAT; */}
@@ -129,6 +130,7 @@ main(int argc, char **argv)
    else
       yyin = stdin;
    yylex();
+   printf("\n");
    printSymTab();
 }
 
