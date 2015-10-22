@@ -24,8 +24,7 @@ WS	 [ \t]+
 Int_constant {digit}+
 
 Float_constant [+-]?(({digit}+\.?{digit}*)|({digit}*\.{digit}+))([eE][+-]?{digit}+)?
-
-String_constant \"[^"]*\"
+String_constant \"(([^"\\])|(\\.))*\"
 comment \/\*([^*]|[ \n\t\r]|((\*)+([^\/*]|[ \n\t\r])))*(\*)*\*\/
 
 
