@@ -423,6 +423,10 @@ stmt		: MK_LBRACE block MK_RBRACE
                     /*TODO*/
                 }
             /*TODO: | While Statement */
+	    | WHILE MK_LPAREN nonempty_expr_list MK_RPAREN stmt
+	    	{
+		    /*TODO*/
+		}
             | FOR MK_LPAREN assign_expr_list MK_SEMICOLON relop_expr_list MK_SEMICOLON assign_expr_list MK_RPAREN stmt
                 {
                     /*TODO*/
@@ -433,7 +437,15 @@ stmt		: MK_LBRACE block MK_RBRACE
                 }
             /*TODO: | If Statement */
             /*TODO: | If then else */
+	    | IF MK_LPAREN nonempty_expr_list MK_RPAREN stmt if_tail
+		{
+                    /*TODO*/
+		}
             /*TODO: | function call */
+	    | function_call
+		{
+		    /*TODO*/
+		}
             | MK_SEMICOLON 
                 {
                     /*TODO*/
@@ -447,6 +459,50 @@ stmt		: MK_LBRACE block MK_RBRACE
                     /*TODO*/
                 }
             ;
+
+if_tail : ELSE stmt
+	    {
+                /*TODO*/
+	    }
+	| 
+	    {
+                /*TODO*/
+	    }
+	;
+
+/*
+primary_expr	: ID
+		| CONST
+		| MK_LPAREN expr MK_RPAREN
+		;
+postfix_expr	: primary_expr
+		| postfix_expr dim_list
+		| function_call
+		| postfix_expr MK_DOT ID
+		| postfix_expr OP_PLUS OP_PLUS
+		| postfix_expr OP_MINUS OP_MINUS
+		;
+*/
+
+function_call	: ID MK_LPAREN expr_list MK_RPAREN
+		    {/*TODO*/}
+		;
+
+expr_list		: nonempty_expr_list
+			    {/*TODO*/}
+			|
+			    {/*TODO*/}
+			;
+
+nonempty_expr_list	: nonempty_expr_list MK_COMMA expr
+			    {
+				/*TODO*/
+			    }
+			| expr
+			    {
+				/*TODO*/
+			    }
+			;
 
 assign_expr_list : nonempty_assign_expr_list 
                      {
@@ -607,6 +663,10 @@ factor		: MK_LPAREN relop_expr MK_RPAREN
                     /*TODO*/
                 }
             /*TODO: | -(<relop_expr>) e.g. -(4) */
+	    | OP_MINUS MK_LPAREN relop_expr MK_RPAREN
+		{
+		    /*TODO*/
+		}
             | OP_NOT MK_LPAREN relop_expr MK_RPAREN
                 {   
                     /*TODO*/
@@ -617,6 +677,10 @@ factor		: MK_LPAREN relop_expr MK_RPAREN
                     $$->semantic_value.const1=$1;
                 }
             /*TODO: | -<constant> e.g. -4 */
+            | OP_MINUS CONST
+                {
+                    /*TODO*/
+                }
             | OP_NOT CONST
                 {
                     /*TODO*/
@@ -626,6 +690,10 @@ factor		: MK_LPAREN relop_expr MK_RPAREN
                     /*TODO*/
                 }
             /*TODO: | -<function call> e.g. -f(4) */
+	    | OP_MINUS ID MK_LPAREN relop_expr_list MK_RPAREN
+                {
+                    /*TODO*/
+                }
             | OP_NOT ID MK_LPAREN relop_expr_list MK_RPAREN
                 {
                     /*TODO*/
@@ -635,6 +703,10 @@ factor		: MK_LPAREN relop_expr MK_RPAREN
                     /*TODO*/
                 }
             /*TODO: | -<var_ref> e.g. -var */
+	    | OP_MINUS var_ref 
+                {
+                    /*TODO*/
+                }
             | OP_NOT var_ref 
                 {
                     /*TODO*/
