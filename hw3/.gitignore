@@ -1,0 +1,10 @@
+parser
+parser.tab.c
+parser.tab.h
+parser.tab.o
+parser.output
+lex.yy.c
+alloc.o
+functions.o
+AST_Graph.gv
+AST_Graph.png

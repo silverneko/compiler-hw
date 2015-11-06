@@ -27,3 +27,5 @@ functions.o: functions.c
 clean:
 	rm -f $(TARGET) $(OBJECT) 
 
+graph:
+	dot -Tpng -oAST_Graph.png AST_Graph.gv
