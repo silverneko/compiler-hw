@@ -337,7 +337,7 @@ var_decl	: type init_id_list MK_SEMICOLON
                 {
                     /* DONE */
                     $$ = makeDeclNode(VARIABLE_DECL);
-                    makeFamily($$, 2, $1, $2);
+                    makeFamily($$, 2, makeIDNode($1, NORMAL_ID), $2);
                 }
             ;
 
