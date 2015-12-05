@@ -4,68 +4,126 @@
 #include <stdio.h>
 // This file is for reference only, you are not required to follow the implementation. //
 
-int HASH(char * str) {
-	int idx=0;
-	while (*str){
-		idx = idx << 1;
-		idx+=*str;
-		str++;
-	}
-	return (idx & (HASH_TABLE_SIZE-1));
-}
+int HASH(char *);
 
 SymbolTable symbolTable;
 
-SymbolTableEntry* newSymbolTableEntry(int nestingLevel)
-{
-    SymbolTableEntry* symbolTableEntry = (SymbolTableEntry*)malloc(sizeof(SymbolTableEntry));
-    symbolTableEntry->nextInHashChain = NULL;
-    symbolTableEntry->prevInHashChain = NULL;
-    symbolTableEntry->nextInSameLevel = NULL;
-    symbolTableEntry->sameNameInOuterLevel = NULL;
-    symbolTableEntry->attribute = NULL;
-    symbolTableEntry->name = NULL;
-    symbolTableEntry->nestingLevel = nestingLevel;
+SymbolTableEntry* newSymbolTableEntry(){
+    SymbolTableEntry* symbolTableEntry = malloc(sizeof(SymbolTableEntry));
+    memset(symbolTableEntry, 0, sizeof(SymbolTableEntry));
     return symbolTableEntry;
 }
 
-void removeFromHashTrain(int hashIndex, SymbolTableEntry* entry)
-{
+void initializeSymbolTable(){
+  symbolTable.tables = NULL;
+  openScope();
 }
 
-void enterIntoHashTrain(int hashIndex, SymbolTableEntry* entry)
-{
+void symbolTableEnd(){
+  while(symbolTable.tables != NULL){
+    closeScope();
+  }
 }
 
-void initializeSymbolTable()
-{
+void openScope(){
+  SymbolTableScope * scope = malloc(sizeof(SymbolTableScope));
+  memset(scope, 0, sizeof(SymbolTableScope));
+  scope->prev = symbolTable.tables;
+  symbolTable.tables = scope;
 }
 
-void symbolTableEnd()
-{
+void closeScope(){
+  /* free the memory, no memory leak is good */
+  SymbolTableScope * scope = symbolTable.tables;
+  symbolTable.tables = scope->prev;
+  for(int i = 0; i < HASH_TABLE_SIZE; ++i){
+    SymbolTableEntry * entry = scope->hashTable[i], * temp;
+    while(entry != NULL){
+      temp = entry->next;
+      free(entry);
+      entry = temp;
+    }
+  }
+  free(scope);
 }
 
-SymbolTableEntry* retrieveSymbol(char* symbolName)
-{
+SymbolTableEntry* retrieveSymbol(char* symbolName){
+  int hashv = HASH(symbolName);
+  SymbolTableScope * scope = symbolTable.tables;
+  while(scope != NULL){
+    SymbolTableEntry * entry = scope->hashTable[hashv];
+    while(entry != NULL){
+      if(strcmp(symbolName, entry->name) == 0){
+        // found !!
+        return entry;
+      }
+      entry = entry->next;
+    }
+    // not found in this scope, go up one level then
+    scope = scope->prev;
+  }
+  // cannot find symbol
+  return NULL;
 }
 
-SymbolTableEntry* enterSymbol(char* symbolName, SymbolAttribute* attribute)
-{
+SymbolTableEntry* enterSymbol(char* symbolName, SymbolAttribute* attribute){
+  if(declaredLocally(symbolName)){
+    return NULL;
+  }
+  int hashv = HASH(symbolName);
+  SymbolTableEntry * entry = newSymbolTableEntry();
+  entry->next = symbolTable.tables->hashTable[hashv];
+  symbolTable.tables->hashTable[hashv] = entry;
+  if(entry->next != NULL){
+    entry->next->prev = entry;
+  }
+  entry->prev = NULL;
+  entry->name = symbolName;
+  entry->symbolAttribute = attribute;
+  return entry;
 }
 
 //remove the symbol from the current scope
-void removeSymbol(char* symbolName)
-{
+void removeSymbol(char* symbolName){
+  int hashv = HASH(symbolName);
+  SymbolTableEntry * entry = symbolTable.tables->hashTable[hashv];
+  while(entry != NULL){
+    if(strcmp(symbolName, entry->name) == 0){
+      // found !!
+      if(entry->prev != NULL){
+        entry->prev->next = entry->next;
+      }
+      if(entry->next != NULL){
+        entry->next->prev = entry->prev;
+      }
+      free(entry);
+      break;
+    }
+    entry = entry->next;
+  }
 }
 
-int declaredLocally(char* symbolName)
-{
+// What is this ????
+int declaredLocally(char* symbolName){
+  int hashv = HASH(symbolName);
+  SymbolTableEntry * entry = symbolTable.tables->hashTable[hashv];
+  while(entry != NULL){
+    if(strcmp(symbolName, entry->name) == 0){
+      // symbol already exists in current scope
+      return 1;
+    }
+    entry = entry->next;
+  }
+  return 0;
 }
 
-void openScope()
-{
+int HASH(char * str) {
+  int idx=0;
+  while (*str){
+    idx = idx << 1;
+    idx+=*str;
+    str++;
+  }
+  return (idx & (HASH_TABLE_SIZE-1));
 }
 
-void closeScope()
-{
-}
