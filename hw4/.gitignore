@@ -1,0 +1,11 @@
+parser
+parser.tab.c
+parser.tab.o
+lex.yy.c
+alloc.o
+functions.o
+semanticAnalysis.o
+symbolTable.o
+parser.output
+parser.tab.h
+
