@@ -80,6 +80,7 @@ SymbolTableEntry* enterSymbol(char* symbolName, SymbolAttribute* attribute){
   entry->prev = NULL;
   entry->name = symbolName;
   entry->symbolAttribute = attribute;
+  //TODO show error message
   return entry;
 }
 

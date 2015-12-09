@@ -143,7 +143,6 @@ DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2)
 DATA_TYPE findTypeDecl(char *name) {
     SymbolTableEntry* entry;
     if((entry = retrieveSymbol(name)) == NULL) {
-        //TODO CHECK
         return ERROR_TYPE;
     }
     if(entry->symbolAttribute->attributeKind != TYPE_ATTRIBUTE) {
@@ -249,7 +248,7 @@ void processProgramNode(AST_NODE *programNode)
                 processVariableDeclList(child);
                 break;
             case DECLARATION_NODE:
-                //processDeclarationNode(child);
+                processDeclarationNode(child);
                 break;
             default:
                 puts("unexpected type");
@@ -267,10 +266,10 @@ void processDeclarationNode(AST_NODE* declarationNode)
             //TODO
             break;
         case TYPE_DECL:
-            printf("test\n");
+            //TODO
             break;
         case FUNCTION_DECL:
-            //declareFunction(declarationNode);
+            declareFunction(declarationNode);
             break;
     }
 }
@@ -380,6 +379,9 @@ void declareFunction(AST_NODE* declarationNode)
 {
     AST_NODE *ret_node, *name_node, *param_node, *block_node; 
     AST_NODE *child;
+    FunctionSignature *func;
+    SymbolAttribute *attr;
+    Parameter *last_param, *new_param;
 
     assert(declarationNode->nodeType == DECLARATION_NODE);
     assert(declarationNode->semantic_value.declSemanticValue.kind == FUNCTION_DECL);
@@ -389,13 +391,90 @@ void declareFunction(AST_NODE* declarationNode)
     param_node = name_node->rightSibling;
     block_node = param_node->rightSibling;
 
-    AST_ITER_CHILD(param_node, child) {
-        assert(child->semantic_value.declSemanticValue.kind == FUNCTION_PARAMETER_DECL);
-        
+    func = (FunctionSignature*)malloc(sizeof(*func));
+    func->returnType = findTypeDecl(ret_node->semantic_value.identifierSemanticValue.identifierName);
+
+    attr = createSymAttr(FUNCTION_SIGNATURE); 
+    attr->functionSignature = func;
+    enterSymbol(name_node->semantic_value.identifierSemanticValue.identifierName, attr);
+    
+    openScope();
+
+    func->parametersCount = 0;
+    last_param = NULL;
+    AST_ITER_SIBLING(param_node->child, child) {
+        func->parametersCount += 1;
+        new_param = (Parameter*)malloc(sizeof(*new_param));
+
         AST_NODE *type_node, *id_node;
+        DATA_TYPE datatype;
 
         type_node = child->child;
         id_node = type_node->rightSibling;
-        printf("%s\n", id_node->semantic_value.identifierSemanticValue.identifierName);
+        
+        datatype = findTypeDecl(type_node->semantic_value.identifierSemanticValue.identifierName);
+
+        switch(id_node->semantic_value.identifierSemanticValue.kind) {
+            case NORMAL_ID:
+            {
+                TypeDescriptor *desc;
+
+                desc = createTypeDesc(SCALAR_TYPE_DESCRIPTOR);
+                desc->dataType = datatype;
+                attr = createSymAttr(VARIABLE_ATTRIBUTE);
+                attr->typeDescriptor = desc;
+                enterSymbol(id_node->semantic_value.identifierSemanticValue.identifierName, attr);
+
+                new_param->type = desc;
+                new_param->parameterName = id_node->semantic_value.identifierSemanticValue.identifierName;
+
+                break;
+            }
+            case ARRAY_ID:
+            {
+                TypeDescriptor *desc;
+                AST_NODE *array_node;
+                int dim;
+
+                desc = createTypeDesc(ARRAY_TYPE_DESCRIPTOR);
+                desc->arrayProperties.elementType = datatype;
+                dim = 0;
+                AST_ITER_CHILD(id_node, array_node) {
+                    //TODO calculte size
+
+                    if(array_node->nodeType = NUL_NODE) {
+                        desc->arrayProperties.sizeInEachDimension[dim] = -1;
+                    } else {
+                        assert(array_node->nodeType == CONST_VALUE_NODE);
+                        desc->arrayProperties.sizeInEachDimension[dim] = array_node->semantic_value.const1->const_u.intval;
+                    }
+                    dim += 1;
+                }
+                desc->arrayProperties.dimension = dim;
+
+                attr = createSymAttr(VARIABLE_ATTRIBUTE);
+                attr->typeDescriptor = desc;
+                enterSymbol(id_node->semantic_value.identifierSemanticValue.identifierName, attr);
+
+                new_param->type = desc;
+                new_param->parameterName = id_node->semantic_value.identifierSemanticValue.identifierName;
+
+                break;
+            }
+            default:
+                puts("unexpected kind");
+                abort();
+                break;
+        }
+
+        if(last_param == NULL) {
+            func->parameterList = new_param;
+        } else {
+            last_param->next =  new_param;
+        }
+        last_param = new_param;
     }
+
+    closeScope();
+
 }
