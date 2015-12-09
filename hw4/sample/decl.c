@@ -1,5 +1,6 @@
 int ABC;
 float ABCD, AAA = 4.0, KKK = 5.5;
+int x[10][100];
 typedef float GFLOAT;
 int main() {
     typedef int INT, INT2, INT3;

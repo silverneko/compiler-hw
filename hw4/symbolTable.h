@@ -42,7 +42,7 @@ typedef struct TypeDescriptor
     {
         DATA_TYPE dataType;//kind: SCALAR_TYPE_DESCRIPTOR
         ArrayProperties arrayProperties;//kind: ARRAY_TYPE_DESCRIPTOR
-    } properties;
+    };
 } TypeDescriptor;
 
 typedef struct Parameter
@@ -68,7 +68,7 @@ typedef struct SymbolAttribute
     {
         TypeDescriptor* typeDescriptor;
         FunctionSignature* functionSignature;
-    } attr;
+    };
 } SymbolAttribute;
 
 typedef struct SymbolTableEntry{
