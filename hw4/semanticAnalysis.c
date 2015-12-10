@@ -78,10 +78,10 @@ void printErrorMsgSpecial(AST_NODE* node1, const char* name2, ErrorMsgKind error
     printf("Error found in line %d\n", node1->linenumber);
     switch(errorMsgKind){
       case PASS_ARRAY_TO_SCALAR:
-        printf("Array %s passed to scalar parameter %s.", idName(node1), name2);
+        printf("Array %s passed to scalar parameter %s.\n", idName(node1), name2);
         break;
       case PASS_SCALAR_TO_ARRAY:
-        printf("Scalar %s passed to array parameter %s.", idName(node1), name2);
+        printf("Scalar %s passed to array parameter %s.\n", idName(node1), name2);
         break;
       default:
         printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
@@ -154,6 +154,8 @@ void semanticAnalysis(AST_NODE *root)
     insertTypeDef(SYMBOL_TABLE_FLOAT_NAME, FLOAT_TYPE);
     insertTypeDef(SYMBOL_TABLE_VOID_NAME, VOID_TYPE);
 
+    // TODO read() fread() write(int or float or strlit)
+
     processProgramNode(root);
 }
 
@@ -185,7 +187,7 @@ void processVariableDeclList(AST_NODE *listNode) {
         assert(child->nodeType == DECLARATION_NODE);
         switch(child->semantic_value.declSemanticValue.kind) {
             case TYPE_DECL:
-            {           
+            {
                 AST_NODE *type_node, *id_node;
                 DATA_TYPE datatype;
 
@@ -493,7 +495,30 @@ void checkWriteFunction(AST_NODE* functionCallNode)
 }
 
 TypeDescriptor * exprType(AST_NODE * node){
-  // TODO : return the type of the expression
+  // TODO : return the kind of the expression, scalar or array
+  TypeDescriptor * typedesc = malloc(sizeof(TypeDescriptor));
+  if(node->semantic_value.identifierSemanticValue.kind == ARRAY_ID){
+    AST_NODE * dims = node->child;
+    SymbolTableEntry * arr = retrieveSymbol(idName(node));
+    if(arr == NULL){
+      printErrorMsg(node, SYMBOL_UNDECLARED);
+      return NULL;
+    }
+    int dimsn = 0;
+    while(dims != NULL){
+      ++dimsn;
+      dims = dims->rightSibling;
+    }
+    typedesc->kind = ARRAY_TYPE_DESCRIPTOR;
+    typedesc->arrayProperties.dimension = arr->symbolAttribute->typeDescriptor->arrayProperties.dimension - dimsn;
+    for(int i = 0; i < typedesc->arrayProperties.dimension; ++i){
+      typedesc->arrayProperties.sizeInEachDimension[i] = 
+        arr->symbolAttribute->typeDescriptor->arrayProperties.sizeInEachDimension[dimsn + i];
+    }
+  }else{
+    typedesc->kind = SCALAR_TYPE_DESCRIPTOR;
+  }
+  return typedesc;
 }
 
 DATA_TYPE checkFunctionCall(AST_NODE* functionCallNode){
@@ -513,7 +538,7 @@ DATA_TYPE checkFunctionCall(AST_NODE* functionCallNode){
     printErrorMsg(_function, TOO_FEW_ARGUMENTS);
     return functionSig->returnType;
   }
-  if(args->nodeType == NUL_NODE){
+  if(args->nodeType != NUL_NODE){
     args = args->child;
   }
   for(Parameter * param = functionSig->parameterList; param != NULL; param = param->next){
@@ -521,19 +546,7 @@ DATA_TYPE checkFunctionCall(AST_NODE* functionCallNode){
       printErrorMsg(_function, TOO_FEW_ARGUMENTS);
       break;
     }
-    TypeDescriptor * typeDesc = exprType(args);
-    switch(param->type->kind){
-      case SCALAR_TYPE_DESCRIPTOR:
-        if(typeDesc->kind == ARRAY_TYPE_DESCRIPTOR){
-          printErrorMsgSpecial(args, param->parameterName, PASS_ARRAY_TO_SCALAR);
-        }
-        break;
-      case ARRAY_TYPE_DESCRIPTOR:
-        // TODO check type
-      default:
-        printf("bad param type\n");
-        exit(1);
-    }
+    checkParameterPassing(param, args);
     args = args->rightSibling;
   }
   if(args != NULL){
@@ -543,8 +556,38 @@ DATA_TYPE checkFunctionCall(AST_NODE* functionCallNode){
   return functionSig->returnType;
 }
 
-void checkParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter)
-{
+void checkParameterPassing(Parameter * param, AST_NODE * arg){
+  TypeDescriptor * typeDesc = exprType(arg);
+  if(typeDesc == NULL){
+    return ;
+  }
+  switch(param->type->kind){
+    case SCALAR_TYPE_DESCRIPTOR:
+      if(typeDesc->kind == ARRAY_TYPE_DESCRIPTOR){
+        printErrorMsgSpecial(arg, param->parameterName, PASS_ARRAY_TO_SCALAR);
+      }else{
+        // may need type cast check
+        // what if `arg` is of type `void` ?
+      }
+      break;
+    case ARRAY_TYPE_DESCRIPTOR:
+      if(typeDesc->kind == SCALAR_TYPE_DESCRIPTOR){
+        printErrorMsgSpecial(arg, param->parameterName, PASS_SCALAR_TO_ARRAY);
+      }else if(typeDesc->arrayProperties.dimension != param->type->arrayProperties.dimension){
+          printErrorMsg(arg, INCOMPATIBLE_ARRAY_DIMENSION);
+      }else{
+        for(int i = 0; i < typeDesc->arrayProperties.dimension; ++i){
+          if(typeDesc->arrayProperties.sizeInEachDimension[i] != param->type->arrayProperties.sizeInEachDimension[i]){
+            printErrorMsg(arg, INCOMPATIBLE_ARRAY_DIMENSION);
+            break;
+          }
+        }
+      }
+      break;
+    default:
+      printf("bad param type\n");
+      exit(1);
+  }
 }
 
 
@@ -790,7 +833,7 @@ void declareFunction(AST_NODE* declarationNode)
                 abort();
                 break;
         }
-
+        new_param->next = NULL;
         if(last_param == NULL) {
             func->parameterList = new_param;
         } else {
