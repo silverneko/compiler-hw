@@ -13,7 +13,7 @@ void processProgramNode(AST_NODE *programNode);
 void processDeclarationNode(AST_NODE* declarationNode);
 void declareIdList(AST_NODE* typeNode, SymbolAttributeKind isVariableOrTypeAttribute, int ignoreArrayFirstDimSize);
 void declareFunction(AST_NODE* returnTypeNode);
-void processDeclDimList(AST_NODE* variableDeclDimList, TypeDescriptor* typeDescriptor, int ignoreFirstDimSize);
+void processDeclDimList(AST_NODE* id_node, DATA_TYPE datatype, TypeDescriptor* desc, int ignoreFirstDimSize);
 void processTypeNode(AST_NODE* typeNode);
 void processBlockNode(AST_NODE* blockNode);
 void processStmtNode(AST_NODE* stmtNode);
@@ -223,19 +223,9 @@ void processVariableDeclList(AST_NODE *listNode) {
                         {
                             TypeDescriptor *desc;
                             SymbolAttribute *attr;
-                            AST_NODE *array_node;
-                            int dim;
 
                             desc = createTypeDesc(ARRAY_TYPE_DESCRIPTOR);
-                            desc->arrayProperties.elementType = datatype;
-                            dim = 0;
-                            AST_ITER_CHILD(id_node, array_node) {
-                                //TODO calculte size
-                                assert(array_node->nodeType == CONST_VALUE_NODE);
-                                desc->arrayProperties.sizeInEachDimension[dim] = array_node->semantic_value.const1->const_u.intval;
-                                dim += 1;
-                            }
-                            desc->arrayProperties.dimension = dim;
+                            processDeclDimList(id_node, datatype, desc, 0);
 
                             attr = createSymAttr(VARIABLE_ATTRIBUTE);
                             attr->typeDescriptor = desc;
@@ -394,8 +384,31 @@ void processGeneralNode(AST_NODE *node)
 {
 }
 
-void processDeclDimList(AST_NODE* idNode, TypeDescriptor* typeDescriptor, int ignoreFirstDimSize)
+void processDeclDimList(AST_NODE* id_node, DATA_TYPE datatype, TypeDescriptor* desc, int ignoreFirstDimSize)
 {
+    AST_NODE *array_node;
+    int dim;
+
+    desc->arrayProperties.elementType = datatype;
+    dim = 0;
+    AST_ITER_CHILD(id_node, array_node) {
+        //TODO calculte size
+
+        if(array_node->nodeType = NUL_NODE) {
+            if(ignoreFirstDimSize) {
+                desc->arrayProperties.sizeInEachDimension[dim] = -1;
+            } else {
+                //TODO Check
+            }
+        } else {
+            assert(array_node->nodeType == CONST_VALUE_NODE);
+            desc->arrayProperties.sizeInEachDimension[dim] = array_node->semantic_value.const1->const_u.intval;
+        }
+
+        dim += 1;
+        ignoreFirstDimSize = 0;
+    }
+    desc->arrayProperties.dimension = dim;
 }
 
 void declareFunction(AST_NODE* declarationNode)
@@ -471,25 +484,9 @@ void declareFunction(AST_NODE* declarationNode)
             case ARRAY_ID:
             {
                 TypeDescriptor *desc;
-                AST_NODE *array_node;
-                int dim;
 
                 desc = createTypeDesc(ARRAY_TYPE_DESCRIPTOR);
-                desc->arrayProperties.elementType = datatype;
-                dim = 0;
-                AST_ITER_CHILD(id_node, array_node) {
-                    //TODO calculte size
-
-                    if(array_node->nodeType = NUL_NODE) {
-                        desc->arrayProperties.sizeInEachDimension[dim] = -1;
-                    } else {
-                        assert(array_node->nodeType == CONST_VALUE_NODE);
-                        desc->arrayProperties.sizeInEachDimension[dim] = array_node->semantic_value.const1->const_u.intval;
-                    }
-                    dim += 1;
-                }
-                desc->arrayProperties.dimension = dim;
-
+                processDeclDimList(id_node, datatype, desc, 1);
                 attr = createSymAttr(VARIABLE_ATTRIBUTE);
                 attr->typeDescriptor = desc;
                 if(enterSymbol(idName(id_node), attr) == NULL){
