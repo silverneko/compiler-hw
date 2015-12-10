@@ -342,8 +342,41 @@ void checkWriteFunction(AST_NODE* functionCallNode)
 {
 }
 
-void checkFunctionCall(AST_NODE* functionCallNode)
-{
+void checkFunctionCall(AST_NODE* functionCallNode){
+  AST_NODE * _function = functionCallNode->child;
+  AST_NODE * args      = _function->rightSibling;
+  SymbolTableEntry * function = retrieveSymbol(idName(_function));
+  if(function == NULL){
+    printErrorMsg(functionCallNode, SYMBOL_UNDECLARED);
+    return ;
+  }
+  FunctionSignature * functionSig = function->symbolAttribute->functionSignature;
+
+  if(functionSig->parameterCount != 0 && args->type == NUL_NODE){
+    printErrorMsg(_function, TOO_FEW_ARGUMENTS);
+    return ;
+  }
+  if(args->type == NUL_NODE){
+    args = args->child;
+  }
+  for(Parameter * param = functonSig->parameterList; param != NULL; param = param->next){
+    if(args == NULL){
+      printErrorMsg(_function, TOO_FEW_ARGUMENTS);
+      break;
+    }
+    switch(param->type->kind){
+      case SCALAR_TYPE_DESCRIPTOR:
+      case ARRAY_TYPE_DESCRIPTOR:
+        // TODO check type
+      default:
+        printf("bad param type\n");
+        exit(1);
+    }
+    args = args->rightSibling;
+  }
+  if(args != NULL){
+    printErrorMsg(_function, TOO_MANY_ARGUMENTS);
+  }
 }
 
 void checkParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter)
@@ -396,7 +429,7 @@ void processBlockNode(AST_NODE* blockNode)
 
     AST_ITER_CHILD(blockNode, child) {
         switch(child->nodeType) {
-            case VARIABLE_DECL_LIST_NODE:      
+            case VARIABLE_DECL_LIST_NODE:
                 processVariableDeclList(child);
                 break;
             case STMT_LIST_NODE:
@@ -429,6 +462,7 @@ void processStmtNode(AST_NODE* stmtNode)
             case IF_STMT:
                 break;
             case FUNCTION_CALL_STMT:
+                checkFunctionCall(child);
                 break;
             case RETURN_STMT:
                 break;
