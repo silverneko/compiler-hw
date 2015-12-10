@@ -13,18 +13,18 @@ void processProgramNode(AST_NODE *programNode);
 void processDeclarationNode(AST_NODE* declarationNode);
 void declareIdList(AST_NODE* typeNode, SymbolAttributeKind isVariableOrTypeAttribute, int ignoreArrayFirstDimSize);
 void declareFunction(AST_NODE* returnTypeNode);
-void processDeclDimList(AST_NODE* id_node, DATA_TYPE datatype, TypeDescriptor* desc, int ignoreFirstDimSize);
+int processDeclDimList(AST_NODE* id_node, DATA_TYPE datatype, TypeDescriptor* desc, int ignoreFirstDimSize);
 void processTypeNode(AST_NODE* typeNode);
 void processBlockNode(AST_NODE* blockNode);
 void processStmtNode(AST_NODE* stmtNode);
 void processGeneralNode(AST_NODE *node);
-void checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode);
+DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode);
 void checkWhileStmt(AST_NODE* whileNode);
 void checkForStmt(AST_NODE* forNode);
 void checkAssignmentStmt(AST_NODE* assignmentNode);
 void checkIfStmt(AST_NODE* ifNode);
 void checkWriteFunction(AST_NODE* functionCallNode);
-void checkFunctionCall(AST_NODE* functionCallNode);
+DATA_TYPE checkFunctionCall(AST_NODE* functionCallNode);
 void processExprRelatedNode(AST_NODE* exprRelatedNode);
 void checkParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter);
 void checkReturnStmt(AST_NODE* returnNode);
@@ -83,7 +83,7 @@ void printErrorMsgSpecial(AST_NODE* node1, const char* name2, ErrorMsgKind error
       case PASS_SCALAR_TO_ARRAY:
         printf("Scalar %s passed to array parameter %s.", idName(node1), name2);
         break;
-    default:
+      default:
         printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
         break;
     }
@@ -314,8 +314,130 @@ void declareIdList(AST_NODE* declarationNode, SymbolAttributeKind isVariableOrTy
 {
 }
 
-void checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
+DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
 {
+    if(assignOrExprRelatedNode->nodeType == CONST_VALUE_NODE) {
+	CON_Type *const1 = assignOrExprRelatedNode->semantic_value.const1;
+        switch(const1->const_type) {
+            case INTEGERC:
+                return INT_TYPE;
+            case FLOATC:
+                return FLOAT_TYPE;
+            case STRINGC:
+                return CONST_STRING_TYPE;
+        }
+    } else if(assignOrExprRelatedNode->nodeType == IDENTIFIER_NODE) {
+        SymbolTableEntry *id_sym = retrieveSymbol(idName(assignOrExprRelatedNode));
+        if(id_sym == NULL){
+            printErrorMsg(assignOrExprRelatedNode, SYMBOL_UNDECLARED);
+            return ERROR_TYPE;
+        }
+
+        SymbolAttribute *attr = id_sym->symbolAttribute;
+        if(attr->attributeKind != VARIABLE_ATTRIBUTE) {
+            //TODO print error message
+            return ERROR_TYPE;
+        }
+
+        TypeDescriptor *desc;
+        desc = attr->typeDescriptor;
+
+        if(desc->kind == SCALAR_TYPE_DESCRIPTOR) {
+            if(assignOrExprRelatedNode->semantic_value.identifierSemanticValue.kind != NORMAL_ID) {
+                //TODO print error message
+                return ERROR_TYPE;
+            }
+            return desc->dataType;
+        } else if(desc->kind == ARRAY_TYPE_DESCRIPTOR) {
+            if(assignOrExprRelatedNode->semantic_value.identifierSemanticValue.kind != ARRAY_ID) {
+                //TODO print error message
+                return ERROR_TYPE;
+            }
+            if(processDeclDimList(assignOrExprRelatedNode, NONE_TYPE, NULL, 0) != desc->arrayProperties.dimension) {
+                //TODO print error message
+                return ERROR_TYPE;
+            }
+            return desc->arrayProperties.elementType;
+        }
+    } else if(assignOrExprRelatedNode->nodeType == STMT_NODE) {
+        if(assignOrExprRelatedNode->semantic_value.stmtSemanticValue.kind == FUNCTION_CALL_STMT) {
+            return checkFunctionCall(assignOrExprRelatedNode);
+        } else if(assignOrExprRelatedNode->semantic_value.stmtSemanticValue.kind == ASSIGN_STMT) {
+            AST_NODE *lvalue_node;
+            AST_NODE *expr_node;
+            DATA_TYPE datatype;
+
+            lvalue_node = assignOrExprRelatedNode->child;
+            datatype = checkAssignOrExpr(lvalue_node);
+
+            expr_node = lvalue_node->rightSibling;
+            checkAssignOrExpr(expr_node);
+
+            //TODO is this correct ?
+            return datatype;
+        }
+    } else if(assignOrExprRelatedNode->nodeType == EXPR_NODE) {
+        AST_NODE *expr_node;
+        DATA_TYPE datatype;
+
+        expr_node = assignOrExprRelatedNode;
+        datatype = ERROR_TYPE;
+
+        switch(expr_node->semantic_value.exprSemanticValue.kind) {
+            case BINARY_OPERATION:
+            {
+                DATA_TYPE ldatatype, rdatatype;
+
+                ldatatype = checkAssignOrExpr(expr_node->child);
+                rdatatype = checkAssignOrExpr(expr_node->child->rightSibling);
+
+                switch(expr_node->semantic_value.exprSemanticValue.op.binaryOp) {
+                    case BINARY_OP_ADD:
+                    case BINARY_OP_SUB:
+                    case BINARY_OP_MUL:
+                    case BINARY_OP_DIV:
+                        //TODO type conversion
+                        datatype = ldatatype;
+                        if(ldatatype == FLOAT_TYPE || rdatatype == FLOAT_TYPE) {
+                            datatype = FLOAT_TYPE;
+                        }
+                        break;
+                    case BINARY_OP_EQ:
+                    case BINARY_OP_GE:
+                    case BINARY_OP_LE:
+                    case BINARY_OP_NE:
+                    case BINARY_OP_GT:
+                    case BINARY_OP_LT:
+                    case BINARY_OP_AND:
+                    case BINARY_OP_OR:
+                        //TODO check type
+                        datatype = INT_TYPE;
+                        break;
+                }
+                break;
+            }
+            case UNARY_OPERATION:
+            {
+                datatype = checkAssignOrExpr(expr_node->child);
+
+                //TODO check type
+                if(expr_node->semantic_value.exprSemanticValue.op.unaryOp == UNARY_OP_LOGICAL_NEGATION) {
+                    datatype = INT_TYPE;
+                }
+                break;
+            }
+            default:
+                puts("unexpected kind");
+                abort();
+                break;
+        }
+
+        return datatype;
+    }
+
+    puts("unexpected case");
+    abort();
+    return ERROR_TYPE;
 }
 
 void checkWhileStmt(AST_NODE* whileNode)
@@ -345,30 +467,29 @@ TypeDescriptor * exprType(AST_NODE * node){
   // TODO : return the type of the expression
 }
 
-void checkFunctionCall(AST_NODE* functionCallNode){
+DATA_TYPE checkFunctionCall(AST_NODE* functionCallNode){
   AST_NODE * _function = functionCallNode->child;
   AST_NODE * args      = _function->rightSibling;
   SymbolTableEntry * function = retrieveSymbol(idName(_function));
   if(function == NULL){
-    printErrorMsg(functionCallNode, SYMBOL_UNDECLARED);
-    return ;
+    printErrorMsg(_function, SYMBOL_UNDECLARED);
+    return ERROR_TYPE;
   }
   FunctionSignature * functionSig = function->symbolAttribute->functionSignature;
 
-
   if(functionSig->parametersCount == 0 && args->nodeType == NUL_NODE){
-    return ;
+    return functionSig->returnType;
   }
   if(functionSig->parametersCount != 0 && args->nodeType == NUL_NODE){
-    printErrorMsg(functionCallNode, TOO_FEW_ARGUMENTS);
-    return ;
+    printErrorMsg(_function, TOO_FEW_ARGUMENTS);
+    return functionSig->returnType;
   }
   if(args->nodeType == NUL_NODE){
     args = args->child;
   }
   for(Parameter * param = functionSig->parameterList; param != NULL; param = param->next){
     if(args == NULL){
-      printErrorMsg(functionCallNode, TOO_FEW_ARGUMENTS);
+      printErrorMsg(_function, TOO_FEW_ARGUMENTS);
       break;
     }
     TypeDescriptor * typeDesc = exprType(args);
@@ -387,8 +508,10 @@ void checkFunctionCall(AST_NODE* functionCallNode){
     args = args->rightSibling;
   }
   if(args != NULL){
-    printErrorMsg(functionCallNode, TOO_MANY_ARGUMENTS);
+    printErrorMsg(_function, TOO_MANY_ARGUMENTS);
   }
+
+  return functionSig->returnType;
 }
 
 void checkParameterPassing(Parameter* formalParameter, AST_NODE* actualParameter)
@@ -470,6 +593,7 @@ void processStmtNode(AST_NODE* stmtNode)
             case FOR_STMT:
                 break;
             case ASSIGN_STMT:
+                checkAssignOrExpr(child);
                 break;
             case IF_STMT:
                 break;
@@ -491,31 +615,41 @@ void processGeneralNode(AST_NODE *node)
 {
 }
 
-void processDeclDimList(AST_NODE* id_node, DATA_TYPE datatype, TypeDescriptor* desc, int ignoreFirstDimSize)
+int processDeclDimList(AST_NODE* id_node, DATA_TYPE datatype, TypeDescriptor* desc, int ignoreFirstDimSize)
 {
     AST_NODE *array_node;
     int dim;
 
-    desc->arrayProperties.elementType = datatype;
     dim = 0;
     AST_ITER_CHILD(id_node, array_node) {
-        //TODO calculte size
-
         if(array_node->nodeType = NUL_NODE) {
             if(ignoreFirstDimSize) {
-                desc->arrayProperties.sizeInEachDimension[dim] = -1;
+                if(desc != NULL) {
+                    desc->arrayProperties.sizeInEachDimension[dim] = -1;
+                }
             } else {
                 //TODO Check
             }
         } else {
             assert(array_node->nodeType == CONST_VALUE_NODE);
-            desc->arrayProperties.sizeInEachDimension[dim] = array_node->semantic_value.const1->const_u.intval;
+
+            //TODO calculte size
+
+            if(desc != NULL) {
+                desc->arrayProperties.sizeInEachDimension[dim] = array_node->semantic_value.const1->const_u.intval;
+            }
         }
 
         dim += 1;
         ignoreFirstDimSize = 0;
     }
-    desc->arrayProperties.dimension = dim;
+
+    if(desc != NULL) {
+        desc->arrayProperties.elementType = datatype;
+        desc->arrayProperties.dimension = dim;
+    }
+
+    return dim;
 }
 
 void declareFunction(AST_NODE* declarationNode)
