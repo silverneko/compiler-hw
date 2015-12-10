@@ -72,7 +72,7 @@ const char * idName(AST_NODE * node){
   return node->semantic_value.identifierSemanticValue.identifierName;
 }
 
-void printErrorMsgSpecial(AST_NODE* node1, char* name2, ErrorMsgKind errorMsgKind)
+void printErrorMsgSpecial(AST_NODE* node1, const char* name2, ErrorMsgKind errorMsgKind)
 {
     g_anyErrorOccur = 1;
     printf("Error found in line %d\n", node1->linenumber);
@@ -173,7 +173,6 @@ DATA_TYPE findTypeDecl(char *name) {
         return ERROR_TYPE;
     }
     if(entry->symbolAttribute->attributeKind != TYPE_ATTRIBUTE) {
-        //TODO CHECK
         return ERROR_TYPE;
     }
     return entry->symbolAttribute->typeDescriptor->dataType;
@@ -342,6 +341,10 @@ void checkWriteFunction(AST_NODE* functionCallNode)
 {
 }
 
+TypeDescriptor * exprType(AST_NODE * node){
+  // TODO : return the type of the expression
+}
+
 void checkFunctionCall(AST_NODE* functionCallNode){
   AST_NODE * _function = functionCallNode->child;
   AST_NODE * args      = _function->rightSibling;
@@ -352,20 +355,29 @@ void checkFunctionCall(AST_NODE* functionCallNode){
   }
   FunctionSignature * functionSig = function->symbolAttribute->functionSignature;
 
-  if(functionSig->parameterCount != 0 && args->type == NUL_NODE){
-    printErrorMsg(_function, TOO_FEW_ARGUMENTS);
+
+  if(functionSig->parametersCount == 0 && args->nodeType == NUL_NODE){
     return ;
   }
-  if(args->type == NUL_NODE){
+  if(functionSig->parametersCount != 0 && args->nodeType == NUL_NODE){
+    printErrorMsg(functionCallNode, TOO_FEW_ARGUMENTS);
+    return ;
+  }
+  if(args->nodeType == NUL_NODE){
     args = args->child;
   }
-  for(Parameter * param = functonSig->parameterList; param != NULL; param = param->next){
+  for(Parameter * param = functionSig->parameterList; param != NULL; param = param->next){
     if(args == NULL){
-      printErrorMsg(_function, TOO_FEW_ARGUMENTS);
+      printErrorMsg(functionCallNode, TOO_FEW_ARGUMENTS);
       break;
     }
+    TypeDescriptor * typeDesc = exprType(args);
     switch(param->type->kind){
       case SCALAR_TYPE_DESCRIPTOR:
+        if(typeDesc->kind == ARRAY_TYPE_DESCRIPTOR){
+          printErrorMsgSpecial(args, param->parameterName, PASS_ARRAY_TO_SCALAR);
+        }
+        break;
       case ARRAY_TYPE_DESCRIPTOR:
         // TODO check type
       default:
@@ -375,7 +387,7 @@ void checkFunctionCall(AST_NODE* functionCallNode){
     args = args->rightSibling;
   }
   if(args != NULL){
-    printErrorMsg(_function, TOO_MANY_ARGUMENTS);
+    printErrorMsg(functionCallNode, TOO_MANY_ARGUMENTS);
   }
 }
 
