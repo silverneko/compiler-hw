@@ -76,14 +76,17 @@ void printErrorMsgSpecial(AST_NODE* node1, char* name2, ErrorMsgKind errorMsgKin
 {
     g_anyErrorOccur = 1;
     printf("Error found in line %d\n", node1->linenumber);
-    /*
-    switch(errorMsgKind)
-    {
+    switch(errorMsgKind){
+      case PASS_ARRAY_TO_SCALAR:
+        printf("Array %s passed to scalar parameter %s.", idName(node1), name2);
+        break;
+      case PASS_SCALAR_TO_ARRAY:
+        printf("Scalar %s passed to array parameter %s.", idName(node1), name2);
+        break;
     default:
         printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
         break;
     }
-    */
 }
 
 
@@ -100,6 +103,21 @@ void printErrorMsg(AST_NODE* node, ErrorMsgKind errorMsgKind)
         break;
       case SYMBOL_UNDECLARED:
         printf("ID %s undeclared.\n", idName(node));
+        break;
+      case TOO_FEW_ARGUMENTS:
+        printf("Too few arguments to function %s.\n", idName(node));
+        break;
+      case TOO_MANY_ARGUMENTS:
+        printf("Too many arguments to function %s.\n", idName(node));
+        break;
+      case RETURN_TYPE_UNMATCH:
+        printf("Incompatible return type.\n");
+        break;
+      case INCOMPATIBLE_ARRAY_DIMENSION:
+        printf("Incompatible array dimensions.\n");
+        break;
+      case ARRAY_SUBSCRIPT_NOT_INT:
+        printf("Array subscript is not an integer.\n");
         break;
       default:
         printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
