@@ -6,8 +6,10 @@ int f(int a){
 int main(){
 	float f1;
 	int i;
-	i = f();
-	i = f(1,2);
-	i = f(1);
+        if(i == 10) {
+	    i = f();
+            i = f(1,2);
+            i = f(1);
+        }
 	return 0;
 }

@@ -623,6 +623,7 @@ void processStmtNode(AST_NODE* stmtNode)
 
     if(stmtNode->nodeType == BLOCK_NODE) {
         processBlockNode(stmtNode);
+        return;
     }
     if(stmtNode->nodeType == NUL_NODE) {
         return;
