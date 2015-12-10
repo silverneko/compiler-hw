@@ -442,21 +442,50 @@ DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
 
 void checkWhileStmt(AST_NODE* whileNode)
 {
+    checkAssignOrExpr(whileNode->child);
+    processStmtNode(whileNode->child->rightSibling);
 }
 
 
 void checkForStmt(AST_NODE* forNode)
 {
+    AST_NODE *cur;
+    AST_NODE *child;
+
+    cur = forNode->child;
+    if(cur->nodeType == NONEMPTY_ASSIGN_EXPR_LIST_NODE) {
+        AST_ITER_CHILD(cur, child) {
+            checkAssignOrExpr(child);
+        }
+    }
+    cur = cur->rightSibling;
+    if(cur->nodeType == NONEMPTY_RELOP_EXPR_LIST_NODE) {
+        AST_ITER_CHILD(cur, child) {
+            checkAssignOrExpr(child);
+        }
+    }
+    cur = cur->rightSibling;
+    if(cur->nodeType == NONEMPTY_ASSIGN_EXPR_LIST_NODE) {
+        AST_ITER_CHILD(cur, child) {
+            checkAssignOrExpr(child);
+        }
+    }
+    cur = cur->rightSibling;
+    processStmtNode(cur);
 }
-
-
-void checkAssignmentStmt(AST_NODE* assignmentNode)
-{
-}
-
 
 void checkIfStmt(AST_NODE* ifNode)
 {
+    AST_NODE *cur;
+
+    cur = ifNode->child;
+    checkAssignOrExpr(cur);
+    cur = cur->rightSibling;
+    processStmtNode(cur);
+    cur = cur->rightSibling;
+    if(cur->nodeType != NUL_NODE) {
+        processStmtNode(cur);
+    }
 }
 
 void checkWriteFunction(AST_NODE* functionCallNode)
@@ -553,6 +582,9 @@ void processConstValueNode(AST_NODE* constValueNode)
 
 void checkReturnStmt(AST_NODE* returnNode)
 {
+    if(returnNode->nodeType != NUL_NODE) {
+        checkAssignOrExpr(returnNode->child);
+    }
 }
 
 
@@ -568,8 +600,14 @@ void processBlockNode(AST_NODE* blockNode)
                 processVariableDeclList(child);
                 break;
             case STMT_LIST_NODE:
-                processStmtNode(child);
+            {
+                AST_NODE *stmt_child;
+
+                AST_ITER_CHILD(child, stmt_child) {
+                    processStmtNode(stmt_child);
+                }
                 break;
+            }
             default:
                 puts("unexpected type");
                 abort();
@@ -581,32 +619,37 @@ void processBlockNode(AST_NODE* blockNode)
 
 void processStmtNode(AST_NODE* stmtNode)
 {
-    AST_NODE *child;
-    AST_ITER_SIBLING(stmtNode->child, child) {
-        printf("%d\n", child->linenumber);
-        if(child->nodeType == NUL_NODE) {
-            continue;
-        }
-        switch(child->semantic_value.stmtSemanticValue.kind) {
-            case WHILE_STMT:
-                break;
-            case FOR_STMT:
-                break;
-            case ASSIGN_STMT:
-                checkAssignOrExpr(child);
-                break;
-            case IF_STMT:
-                break;
-            case FUNCTION_CALL_STMT:
-                checkFunctionCall(child);
-                break;
-            case RETURN_STMT:
-                break;
-            default:
-                puts("unexpected type");
-                abort();
-                break;
-        }
+    printf("%d\n", stmtNode->linenumber);
+
+    if(stmtNode->nodeType == BLOCK_NODE) {
+        processBlockNode(stmtNode);
+    }
+    if(stmtNode->nodeType == NUL_NODE) {
+        return;
+    }
+    switch(stmtNode->semantic_value.stmtSemanticValue.kind) {
+        case WHILE_STMT:
+            checkWhileStmt(stmtNode);
+            break;
+        case FOR_STMT:
+            checkForStmt(stmtNode);
+            break;
+        case ASSIGN_STMT:
+            checkAssignOrExpr(stmtNode);
+            break;
+        case IF_STMT:
+            checkIfStmt(stmtNode);
+            break;
+        case FUNCTION_CALL_STMT:
+            checkFunctionCall(stmtNode);
+            break;
+        case RETURN_STMT:
+            checkReturnStmt(stmtNode);
+            break;
+        default:
+            puts("unexpected type");
+            abort();
+            break;
     }
 }
 
