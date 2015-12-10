@@ -68,6 +68,10 @@ typedef enum ErrorMsgKind
     PASS_SCALAR_TO_ARRAY
 } ErrorMsgKind;
 
+const char * idName(AST_NODE * node){
+  return node->semantic_value.identifierSemanticValue.identifierName;
+}
+
 void printErrorMsgSpecial(AST_NODE* node1, char* name2, ErrorMsgKind errorMsgKind)
 {
     g_anyErrorOccur = 1;
@@ -87,13 +91,20 @@ void printErrorMsg(AST_NODE* node, ErrorMsgKind errorMsgKind)
 {
     g_anyErrorOccur = 1;
     printf("Error found in line %d\n", node->linenumber);
-    /*
-    switch(errorMsgKind)
-    {
+    switch(errorMsgKind){
+      case SYMBOL_IS_NOT_TYPE:
+        printf("ID %s is not type.\n", idName(node));
+        break;
+      case SYMBOL_REDECLARE:
+        printf("ID %s redeclared.\n", idName(node));
+        break;
+      case SYMBOL_UNDECLARED:
+        printf("ID %s undeclared.\n", idName(node));
+        break;
+      default:
         printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
         break;
     }
-    */
 }
 
 TypeDescriptor* createTypeDesc(TypeDescriptorKind kind) {
@@ -108,7 +119,7 @@ SymbolAttribute* createSymAttr(SymbolAttributeKind attributeKind) {
     attr->attributeKind = attributeKind;
     return attr;
 }
-int insertTypeDef(char *name, DATA_TYPE type) {
+SymbolTableEntry * insertTypeDef(const char *name, DATA_TYPE type) {
     SymbolAttribute *attr;
     TypeDescriptor *desc;
 
@@ -116,9 +127,7 @@ int insertTypeDef(char *name, DATA_TYPE type) {
     desc->dataType = type;
     attr = createSymAttr(TYPE_ATTRIBUTE);
     attr->typeDescriptor = desc;
-    enterSymbol(name, attr);
-
-    return 0;
+    return enterSymbol(name, attr);
 }
 
 void semanticAnalysis(AST_NODE *root)
@@ -165,8 +174,14 @@ void processVariableDeclList(AST_NODE *listNode) {
 
                 type_node = child->child;
                 datatype = findTypeDecl(type_node->semantic_value.identifierSemanticValue.identifierName);
+                if(datatype == ERROR_TYPE){
+                  printf("type decl error\n");
+                  exit(1);
+                }
                 AST_ITER_SIBLING(type_node->rightSibling, id_node) {
-                    insertTypeDef(id_node->semantic_value.identifierSemanticValue.identifierName, datatype);
+                    if(insertTypeDef(idName(id_node), datatype) == NULL){
+                      printErrorMsg(id_node, SYMBOL_REDECLARE);
+                    }
                 }
 
                 break;
@@ -178,6 +193,10 @@ void processVariableDeclList(AST_NODE *listNode) {
 
                 type_node = child->child;
                 datatype = findTypeDecl(type_node->semantic_value.identifierSemanticValue.identifierName);
+                if(datatype == ERROR_TYPE){
+                  printErrorMsg(type_node, SYMBOL_IS_NOT_TYPE);
+                  break;
+                }
                 AST_ITER_SIBLING(type_node->rightSibling, id_node) {
                     switch(id_node->semantic_value.identifierSemanticValue.kind) {
                         case NORMAL_ID:
@@ -194,7 +213,9 @@ void processVariableDeclList(AST_NODE *listNode) {
                             desc->dataType = datatype;
                             attr = createSymAttr(VARIABLE_ATTRIBUTE);
                             attr->typeDescriptor = desc;
-                            enterSymbol(id_node->semantic_value.identifierSemanticValue.identifierName, attr);
+                            if(enterSymbol(idName(id_node), attr) == NULL){
+                              printErrorMsg(id_node, SYMBOL_REDECLARE);
+                            }
 
                             break;
                         }
@@ -218,7 +239,9 @@ void processVariableDeclList(AST_NODE *listNode) {
 
                             attr = createSymAttr(VARIABLE_ATTRIBUTE);
                             attr->typeDescriptor = desc;
-                            enterSymbol(id_node->semantic_value.identifierSemanticValue.identifierName, attr);
+                            if(enterSymbol(idName(id_node), attr) == NULL){
+                              printErrorMsg(id_node, SYMBOL_REDECLARE);
+                            }
 
                             break;
                         }
@@ -393,10 +416,18 @@ void declareFunction(AST_NODE* declarationNode)
 
     func = (FunctionSignature*)malloc(sizeof(*func));
     func->returnType = findTypeDecl(ret_node->semantic_value.identifierSemanticValue.identifierName);
+    if(func->returnType == ERROR_TYPE){
+      printErrorMsg(ret_node, SYMBOL_IS_NOT_TYPE);
+      return ;
+    }
 
     attr = createSymAttr(FUNCTION_SIGNATURE); 
     attr->functionSignature = func;
-    enterSymbol(name_node->semantic_value.identifierSemanticValue.identifierName, attr);
+    if(enterSymbol(idName(name_node), attr) == NULL){
+      printErrorMsg(name_node, SYMBOL_REDECLARE);
+      return ;
+    }
+
     
     openScope();
 
@@ -413,6 +444,10 @@ void declareFunction(AST_NODE* declarationNode)
         id_node = type_node->rightSibling;
         
         datatype = findTypeDecl(type_node->semantic_value.identifierSemanticValue.identifierName);
+        if(datatype == ERROR_TYPE){
+          printErrorMsg(type_node, SYMBOL_IS_NOT_TYPE);
+          break;
+        }
 
         switch(id_node->semantic_value.identifierSemanticValue.kind) {
             case NORMAL_ID:
@@ -423,7 +458,10 @@ void declareFunction(AST_NODE* declarationNode)
                 desc->dataType = datatype;
                 attr = createSymAttr(VARIABLE_ATTRIBUTE);
                 attr->typeDescriptor = desc;
-                enterSymbol(id_node->semantic_value.identifierSemanticValue.identifierName, attr);
+                if(enterSymbol(idName(id_node), attr) == NULL){
+                  printErrorMsg(id_node, SYMBOL_REDECLARE);
+                  break ;
+                }
 
                 new_param->type = desc;
                 new_param->parameterName = id_node->semantic_value.identifierSemanticValue.identifierName;
@@ -454,7 +492,11 @@ void declareFunction(AST_NODE* declarationNode)
 
                 attr = createSymAttr(VARIABLE_ATTRIBUTE);
                 attr->typeDescriptor = desc;
-                enterSymbol(id_node->semantic_value.identifierSemanticValue.identifierName, attr);
+                if(enterSymbol(idName(id_node), attr) == NULL){
+                  printErrorMsg(id_node, SYMBOL_REDECLARE);
+                  break ;
+                }
+
 
                 new_param->type = desc;
                 new_param->parameterName = id_node->semantic_value.identifierSemanticValue.identifierName;

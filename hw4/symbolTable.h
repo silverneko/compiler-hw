@@ -91,10 +91,10 @@ void initializeSymbolTable();
 void symbolTableEnd();
 void openScope();
 void closeScope();
-SymbolTableEntry* retrieveSymbol(char* symbolName);
-SymbolTableEntry* enterSymbol(char* symbolName, SymbolAttribute* attribute);
-void removeSymbol(char* symbolName);
-int declaredLocally(char* symbolName);
+SymbolTableEntry* retrieveSymbol(const char* symbolName);
+SymbolTableEntry* enterSymbol(const char* symbolName, SymbolAttribute* attribute);
+void removeSymbol(const char* symbolName);
+int declaredLocally(const char* symbolName);
 
 /*
 typedef struct SymbolTableEntry

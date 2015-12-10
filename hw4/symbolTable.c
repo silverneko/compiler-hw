@@ -4,7 +4,7 @@
 #include <stdio.h>
 // This file is for reference only, you are not required to follow the implementation. //
 
-int HASH(char *);
+int HASH(const char *);
 
 SymbolTable symbolTable;
 
@@ -47,7 +47,7 @@ void closeScope(){
   free(scope);
 }
 
-SymbolTableEntry* retrieveSymbol(char* symbolName){
+SymbolTableEntry* retrieveSymbol(const char * symbolName){
   int hashv = HASH(symbolName);
   SymbolTableScope * scope = symbolTable.tables;
   while(scope != NULL){
@@ -66,7 +66,7 @@ SymbolTableEntry* retrieveSymbol(char* symbolName){
   return NULL;
 }
 
-SymbolTableEntry* enterSymbol(char* symbolName, SymbolAttribute* attribute){
+SymbolTableEntry* enterSymbol(const char * symbolName, SymbolAttribute* attribute){
   if(declaredLocally(symbolName)){
     return NULL;
   }
@@ -80,12 +80,11 @@ SymbolTableEntry* enterSymbol(char* symbolName, SymbolAttribute* attribute){
   entry->prev = NULL;
   entry->name = symbolName;
   entry->symbolAttribute = attribute;
-  //TODO show error message
   return entry;
 }
 
 //remove the symbol from the current scope
-void removeSymbol(char* symbolName){
+void removeSymbol(const char * symbolName){
   int hashv = HASH(symbolName);
   SymbolTableEntry * entry = symbolTable.tables->hashTable[hashv];
   while(entry != NULL){
@@ -104,8 +103,7 @@ void removeSymbol(char* symbolName){
   }
 }
 
-// What is this ????
-int declaredLocally(char* symbolName){
+int declaredLocally(const char * symbolName){
   int hashv = HASH(symbolName);
   SymbolTableEntry * entry = symbolTable.tables->hashTable[hashv];
   while(entry != NULL){
@@ -118,7 +116,7 @@ int declaredLocally(char* symbolName){
   return 0;
 }
 
-int HASH(char * str) {
+int HASH(const char * str) {
   int idx=0;
   while (*str){
     idx = idx << 1;
