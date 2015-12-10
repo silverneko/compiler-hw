@@ -349,11 +349,54 @@ void checkReturnStmt(AST_NODE* returnNode)
 
 void processBlockNode(AST_NODE* blockNode)
 {
+    AST_NODE *child;
+
+    assert(blockNode->nodeType == BLOCK_NODE);
+
+    AST_ITER_CHILD(blockNode, child) {
+        switch(child->nodeType) {
+            case VARIABLE_DECL_LIST_NODE:      
+                processVariableDeclList(child);
+                break;
+            case STMT_LIST_NODE:
+                processStmtNode(child);
+                break;
+            default:
+                puts("unexpected type");
+                abort();
+                break;
+        }
+    }
 }
 
 
 void processStmtNode(AST_NODE* stmtNode)
 {
+    AST_NODE *child;
+    AST_ITER_SIBLING(stmtNode->child, child) {
+        printf("%d\n", child->linenumber);
+        if(child->nodeType == NUL_NODE) {
+            continue;
+        }
+        switch(child->semantic_value.stmtSemanticValue.kind) {
+            case WHILE_STMT:
+                break;
+            case FOR_STMT:
+                break;
+            case ASSIGN_STMT:
+                break;
+            case IF_STMT:
+                break;
+            case FUNCTION_CALL_STMT:
+                break;
+            case RETURN_STMT:
+                break;
+            default:
+                puts("unexpected type");
+                abort();
+                break;
+        }
+    }
 }
 
 
@@ -471,6 +514,8 @@ void declareFunction(AST_NODE* declarationNode)
         }
         last_param = new_param;
     }
+
+    processBlockNode(block_node);
 
     closeScope();
 
