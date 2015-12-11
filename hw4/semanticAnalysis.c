@@ -693,26 +693,36 @@ void checkWriteFunction(AST_NODE* functionCallNode)
 TypeDescriptor * exprType(AST_NODE * node){
   // TODO : return the kind of the expression, scalar or array
   TypeDescriptor * typedesc = malloc(sizeof(TypeDescriptor));
-  if(node->semantic_value.identifierSemanticValue.kind == ARRAY_ID){
-    AST_NODE * dims = node->child;
-    SymbolTableEntry * arr = retrieveSymbol(idName(node));
-    if(arr == NULL){
-      printErrorMsg(node, SYMBOL_UNDECLARED);
-      return NULL;
+  typedesc->kind = SCALAR_TYPE_DESCRIPTOR;
+  switch(node->semantic_value.identifierSemanticValue.kind){
+    case ARRAY_ID:
+    case NORMAL_ID:
+    {
+      SymbolTableEntry * arr = retrieveSymbol(idName(node));
+      if(arr == NULL){
+        printErrorMsg(node, SYMBOL_UNDECLARED);
+        return NULL;
+      }
+      if(arr->symbolAttribute->typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR){
+        break;
+      }
+      // array type
+      typedesc->kind = ARRAY_TYPE_DESCRIPTOR;
+      AST_NODE * dims = node->child;
+      int dimsn = 0;
+      while(dims != NULL){
+        ++dimsn;
+        dims = dims->rightSibling;
+      }
+      typedesc->arrayProperties.dimension = arr->symbolAttribute->typeDescriptor->arrayProperties.dimension - dimsn;
+      for(int i = 0; i < typedesc->arrayProperties.dimension; ++i){
+        typedesc->arrayProperties.sizeInEachDimension[i] = 
+          arr->symbolAttribute->typeDescriptor->arrayProperties.sizeInEachDimension[dimsn + i];
+      }
+      break;
     }
-    int dimsn = 0;
-    while(dims != NULL){
-      ++dimsn;
-      dims = dims->rightSibling;
-    }
-    typedesc->kind = ARRAY_TYPE_DESCRIPTOR;
-    typedesc->arrayProperties.dimension = arr->symbolAttribute->typeDescriptor->arrayProperties.dimension - dimsn;
-    for(int i = 0; i < typedesc->arrayProperties.dimension; ++i){
-      typedesc->arrayProperties.sizeInEachDimension[i] = 
-        arr->symbolAttribute->typeDescriptor->arrayProperties.sizeInEachDimension[dimsn + i];
-    }
-  }else{
-    typedesc->kind = SCALAR_TYPE_DESCRIPTOR;
+    default:
+      break;
   }
   return typedesc;
 }
@@ -773,6 +783,10 @@ void checkParameterPassing(Parameter * param, AST_NODE * arg){
           printErrorMsg(arg, INCOMPATIBLE_ARRAY_DIMENSION);
       }else{
         for(int i = 0; i < typeDesc->arrayProperties.dimension; ++i){
+          if(i == 0 && param->type->arrayProperties.sizeInEachDimension[0] == -1){
+            // ignore first dimensino
+            continue;
+          }
           if(typeDesc->arrayProperties.sizeInEachDimension[i] != param->type->arrayProperties.sizeInEachDimension[i]){
             printErrorMsg(arg, INCOMPATIBLE_ARRAY_DIMENSION);
             break;
@@ -858,7 +872,7 @@ void processBlockNode(AST_NODE* blockNode)
 
 void processStmtNode(AST_NODE* stmtNode)
 {
-    printf("%d\n", stmtNode->linenumber);
+    // printf("%d\n", stmtNode->linenumber);
 
     if(stmtNode->nodeType == BLOCK_NODE) {
         processBlockNode(stmtNode);
