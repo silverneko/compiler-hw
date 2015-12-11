@@ -7,6 +7,7 @@
 // This file is for reference only, you are not required to follow the implementation. //
 // You only need to check for errors stated in the hw4 assignment document. //
 int g_anyErrorOccur = 0;
+DATA_TYPE __returnType;
 
 DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2);
 void processProgramNode(AST_NODE *programNode);
@@ -634,6 +635,8 @@ DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
         expr_node->semantic_value.exprSemanticValue.dataType = datatype;
 
         return datatype;
+    }else if(assignOrExprRelatedNode->nodeType == NUL_NODE) {
+        return VOID_VARIABLE;
     }
 
     puts("unexpected case");
@@ -851,7 +854,13 @@ void processConstValueNode(AST_NODE* constValueNode)
 void checkReturnStmt(AST_NODE* returnNode)
 {
     if(returnNode->nodeType != NUL_NODE) {
-        checkAssignOrExpr(returnNode->child);
+        if(__returnType != checkAssignOrExpr(returnNode->child)){
+          printErrorMsg(returnNode, RETURN_TYPE_UNMATCH);
+        }
+    }else{
+        if(__returnType != VOID_TYPE){
+          printErrorMsg(returnNode, RETURN_TYPE_UNMATCH);
+        }
     }
 }
 
@@ -996,6 +1005,7 @@ void declareFunction(AST_NODE* declarationNode)
 
     func = (FunctionSignature*)malloc(sizeof(*func));
     func->returnType = findTypeDecl(ret_node->semantic_value.identifierSemanticValue.identifierName);
+    __returnType = func->returnType;
     if(func->returnType == ERROR_TYPE){
       printErrorMsg(ret_node, SYMBOL_IS_NOT_TYPE);
       return ;
