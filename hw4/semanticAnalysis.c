@@ -119,6 +119,9 @@ void printErrorMsg(AST_NODE* node, ErrorMsgKind errorMsgKind)
       case ARRAY_SUBSCRIPT_NOT_INT:
         printf("Array subscript is not an integer.\n");
         break;
+      case NOT_FUNCTION_NAME:
+        printf("ID %s is not function name.\n", idName(node));
+        break;
       default:
         printf("Unhandled case in void printErrorMsg(AST_NODE* node, ERROR_MSG_KIND* errorMsgKind)\n");
         break;
@@ -741,6 +744,9 @@ DATA_TYPE checkFunctionCall(AST_NODE* functionCallNode){
   SymbolTableEntry * function = retrieveSymbol(idName(_function));
   if(function == NULL){
     printErrorMsg(_function, SYMBOL_UNDECLARED);
+    return ERROR_TYPE;
+  }else if(function->symbolAttribute->attributeKind != FUNCTION_SIGNATURE){
+    printErrorMsg(_function, NOT_FUNCTION_NAME);
     return ERROR_TYPE;
   }
   FunctionSignature * functionSig = function->symbolAttribute->functionSignature;
