@@ -280,7 +280,7 @@ void processProgramNode(AST_NODE *programNode)
                 processVariableDeclList(child);
                 break;
             case DECLARATION_NODE:
-                processDeclarationNode(child);
+                declareFunction(child);
                 break;
             default:
                 puts("unexpected type");
@@ -292,18 +292,6 @@ void processProgramNode(AST_NODE *programNode)
 
 void processDeclarationNode(AST_NODE* declarationNode)
 {
-    assert(declarationNode->nodeType == DECLARATION_NODE);
-    switch(declarationNode->semantic_value.declSemanticValue.kind) {
-        case VARIABLE_DECL:
-            //TODO
-            break;
-        case TYPE_DECL:
-            //TODO
-            break;
-        case FUNCTION_DECL:
-            declareFunction(declarationNode);
-            break;
-    }
 }
 
 
@@ -316,6 +304,197 @@ void declareIdList(AST_NODE* declarationNode, SymbolAttributeKind isVariableOrTy
 {
 }
 
+DATA_TYPE checkEvalConst(AST_NODE *node, int *intval, float *floatval) {
+    if(node->nodeType == CONST_VALUE_NODE) {
+        if(node->semantic_value.const1->const_type == INTEGERC) {
+            *intval = node->semantic_value.const1->const_u.intval;
+            return INT_TYPE;
+        } else if(node->semantic_value.const1->const_type == FLOATC) {
+            *floatval = node->semantic_value.const1->const_u.fval;
+            return FLOAT_TYPE;
+        }
+        return ERROR_TYPE;
+    } else if(node->nodeType == EXPR_NODE && node->semantic_value.exprSemanticValue.isConstEval == 1) {
+        if(node->semantic_value.exprSemanticValue.dataType == INT_TYPE) {
+            *intval = node->semantic_value.exprSemanticValue.constEvalValue.iValue;
+            return INT_TYPE;
+        } else if(node->semantic_value.exprSemanticValue.dataType == FLOAT_TYPE) {
+            *floatval = node->semantic_value.exprSemanticValue.constEvalValue.fValue;
+            return FLOAT_TYPE;
+        }
+        return ERROR_TYPE;
+    }
+    return ERROR_TYPE;
+}
+void constFolding(AST_NODE *expr_node, DATA_TYPE datatype) {
+    if(expr_node->semantic_value.exprSemanticValue.kind == UNARY_OPERATION) {
+        AST_NODE *lexpr;
+        DATA_TYPE ldatatype;
+        int lint;
+        float lfloat;
+
+        lexpr = expr_node->child;
+        ldatatype = checkEvalConst(lexpr, &lint, &lfloat);
+        if(ldatatype == ERROR_TYPE) {
+            return;
+        }
+
+        if(datatype == INT_TYPE) {
+            assert(ldatatype == INT_TYPE);
+
+            int val;
+
+            switch(expr_node->semantic_value.exprSemanticValue.op.unaryOp) {
+                case UNARY_OP_POSITIVE:
+                    val = lint;
+                    break;
+                case UNARY_OP_NEGATIVE:
+                    val = -lint;
+                    break;
+                case UNARY_OP_LOGICAL_NEGATION:
+                    val = (~lint);
+                    break;
+            }
+
+            expr_node->semantic_value.exprSemanticValue.isConstEval = 1;
+            expr_node->semantic_value.exprSemanticValue.constEvalValue.iValue = val;
+
+        } else if(datatype == FLOAT_TYPE) {
+            if(ldatatype == INT_TYPE) {
+                lfloat = (float)lint;
+            }
+
+            float val;
+
+            switch(expr_node->semantic_value.exprSemanticValue.op.unaryOp) {
+                case UNARY_OP_POSITIVE:
+                    val = lfloat;
+                    break;
+                case UNARY_OP_NEGATIVE:
+                    val = -lfloat;
+                    break;
+            }
+
+            expr_node->semantic_value.exprSemanticValue.isConstEval = 1;
+            expr_node->semantic_value.exprSemanticValue.constEvalValue.fValue = val;
+        }
+    } else if(expr_node->semantic_value.exprSemanticValue.kind == BINARY_OPERATION) {
+        AST_NODE *lexpr, *rexpr;
+        int lint, rint;
+        float lfloat, rfloat;
+        DATA_TYPE ldatatype, rdatatype;
+
+        lexpr = expr_node->child;
+        rexpr = lexpr->rightSibling;
+        
+        ldatatype = checkEvalConst(lexpr, &lint, &lfloat);
+        rdatatype = checkEvalConst(rexpr, &rint, &rfloat);
+        if(ldatatype == ERROR_TYPE || rdatatype == ERROR_TYPE) {
+            return;
+        }
+
+        if(datatype == INT_TYPE) {
+            assert(ldatatype == INT_TYPE);
+            assert(rdatatype == INT_TYPE);
+
+            int val;
+            
+            switch(expr_node->semantic_value.exprSemanticValue.op.binaryOp) {
+                case BINARY_OP_ADD:
+                    val = lint + rint;
+                    break;
+                case BINARY_OP_SUB:
+                    val = lint - rint;
+                    break;
+                case BINARY_OP_MUL:
+                    val = lint * rint;
+                    break;
+                case BINARY_OP_DIV:
+                    val = lint / rint;
+                    break;
+                case BINARY_OP_EQ:
+                    val = (lint == rint);
+                    break;
+                case BINARY_OP_GE:
+                    val = (lint >= rint);
+                    break;
+                case BINARY_OP_LE:
+                    val = (lint <= rint);
+                    break;
+                case BINARY_OP_NE:
+                    val = (lint != rint);
+                    break;
+                case BINARY_OP_GT:
+                    val = (lint > rint);
+                    break;
+                case BINARY_OP_LT:
+                    val = (lint < rint);
+                    break;
+                case BINARY_OP_AND:
+                    val = (lint && rint);
+                    break;
+                case BINARY_OP_OR:
+                    val = (lint || rint);
+                    break;
+            }
+
+            expr_node->semantic_value.exprSemanticValue.isConstEval = 1;
+            expr_node->semantic_value.exprSemanticValue.constEvalValue.iValue = val;
+
+        } else if(datatype == FLOAT_TYPE) {
+            if(ldatatype == INT_TYPE) {
+                lfloat = (float)lint;
+            }
+            if(rdatatype == INT_TYPE) {
+                rfloat = (float)rint;
+            }
+
+            float val;
+            
+            switch(expr_node->semantic_value.exprSemanticValue.op.binaryOp) {
+                case BINARY_OP_ADD:
+                    val = lfloat + rfloat;
+                    break;
+                case BINARY_OP_SUB:
+                    val = lfloat - rfloat;
+                    break;
+                case BINARY_OP_MUL:
+                    val = lfloat * rfloat;
+                    break;
+                case BINARY_OP_DIV:
+                    val = lfloat / rfloat;
+                    break;
+                case BINARY_OP_EQ:
+                    val = (lfloat == rfloat);
+                    break;
+                case BINARY_OP_GE:
+                    val = (lfloat >= rfloat);
+                    break;
+                case BINARY_OP_LE:
+                    val = (lfloat <= rfloat);
+                    break;
+                case BINARY_OP_NE:
+                    val = (lfloat != rfloat);
+                    break;
+                case BINARY_OP_GT:
+                    val = (lfloat > rfloat);
+                    break;
+                case BINARY_OP_LT:
+                    val = (lfloat < rfloat);
+                    break;
+                case BINARY_OP_AND:
+                    val = (lfloat && rfloat);
+                    break;
+                case BINARY_OP_OR:
+                    val = (lfloat || rfloat);
+                    break;
+            }
+
+            expr_node->semantic_value.exprSemanticValue.isConstEval = 1;
+            expr_node->semantic_value.exprSemanticValue.constEvalValue.fValue = val;
+        }
+    }
+}
 DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
 {
     if(assignOrExprRelatedNode->nodeType == CONST_VALUE_NODE) {
@@ -393,16 +572,27 @@ DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
                 ldatatype = checkAssignOrExpr(expr_node->child);
                 rdatatype = checkAssignOrExpr(expr_node->child->rightSibling);
 
+                if(ldatatype != INT_TYPE && ldatatype != FLOAT_TYPE) {
+                    //TODO type error
+                    datatype = ERROR_TYPE;
+                    break;
+                }
+                if(rdatatype != INT_TYPE && rdatatype != FLOAT_TYPE) {
+                    //TODO type error
+                    datatype = ERROR_TYPE;
+                    break;
+                }
+
                 switch(expr_node->semantic_value.exprSemanticValue.op.binaryOp) {
                     case BINARY_OP_ADD:
                     case BINARY_OP_SUB:
                     case BINARY_OP_MUL:
                     case BINARY_OP_DIV:
-                        //TODO type conversion
                         datatype = ldatatype;
                         if(ldatatype == FLOAT_TYPE || rdatatype == FLOAT_TYPE) {
                             datatype = FLOAT_TYPE;
                         }
+                        constFolding(expr_node, datatype);
                         break;
                     case BINARY_OP_EQ:
                     case BINARY_OP_GE:
@@ -412,8 +602,8 @@ DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
                     case BINARY_OP_LT:
                     case BINARY_OP_AND:
                     case BINARY_OP_OR:
-                        //TODO check type
                         datatype = INT_TYPE;
+                        constFolding(expr_node, datatype);
                         break;
                 }
                 break;
@@ -421,11 +611,15 @@ DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
             case UNARY_OPERATION:
             {
                 datatype = checkAssignOrExpr(expr_node->child);
-
-                //TODO check type
+                if(datatype != INT_TYPE && datatype != FLOAT_TYPE) {
+                    //TODO type error
+                    datatype = ERROR_TYPE;
+                    break;
+                }
                 if(expr_node->semantic_value.exprSemanticValue.op.unaryOp == UNARY_OP_LOGICAL_NEGATION) {
                     datatype = INT_TYPE;
                 }
+                constFolding(expr_node, datatype);
                 break;
             }
             default:
@@ -433,6 +627,8 @@ DATA_TYPE checkAssignOrExpr(AST_NODE* assignOrExprRelatedNode)
                 abort();
                 break;
         }
+        
+        expr_node->semantic_value.exprSemanticValue.dataType = datatype;
 
         return datatype;
     }
@@ -709,7 +905,7 @@ int processDeclDimList(AST_NODE* id_node, DATA_TYPE datatype, TypeDescriptor* de
 
     dim = 0;
     AST_ITER_CHILD(id_node, array_node) {
-        if(array_node->nodeType = NUL_NODE) {
+        if(array_node->nodeType == NUL_NODE) {
             if(ignoreFirstDimSize) {
                 if(desc != NULL) {
                     desc->arrayProperties.sizeInEachDimension[dim] = -1;
@@ -718,12 +914,26 @@ int processDeclDimList(AST_NODE* id_node, DATA_TYPE datatype, TypeDescriptor* de
                 //TODO Check
             }
         } else {
-            assert(array_node->nodeType == CONST_VALUE_NODE);
+            int size;
 
-            //TODO calculte size
+            if(array_node->nodeType == CONST_VALUE_NODE) {
+                if(array_node->semantic_value.const1->const_type != INTEGERC) {
+                    printErrorMsg(array_node, ARRAY_SUBSCRIPT_NOT_INT);
+                    size = -2;
+                } else {
+                    size = array_node->semantic_value.const1->const_u.intval;
+                }
+            } else if(array_node->nodeType == EXPR_NODE) {
+                if(checkAssignOrExpr(array_node) != INT_TYPE) {
+                    printErrorMsg(array_node, ARRAY_SUBSCRIPT_NOT_INT);
+                    size = -2;
+                } else {
+                    size = array_node->semantic_value.exprSemanticValue.constEvalValue.iValue;
+                }
+            }
 
             if(desc != NULL) {
-                desc->arrayProperties.sizeInEachDimension[dim] = array_node->semantic_value.const1->const_u.intval;
+                desc->arrayProperties.sizeInEachDimension[dim] = size;
             }
         }
 

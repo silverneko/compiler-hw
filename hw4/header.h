@@ -102,6 +102,7 @@ typedef struct STMTSemanticValue
 typedef struct EXPRSemanticValue
 {
     EXPR_KIND kind;
+    DATA_TYPE dataType;
     
     int isConstEval;
 
@@ -157,11 +158,11 @@ struct AST_NODE {
         DATA_TYPE dataType;
 	int linenumber;
 	union {
-        IdentifierSemanticValue identifierSemanticValue;
-        STMTSemanticValue stmtSemanticValue;
-        DECLSemanticValue declSemanticValue;
-        EXPRSemanticValue exprSemanticValue;
-		CON_Type *const1;
+            IdentifierSemanticValue identifierSemanticValue;
+            STMTSemanticValue stmtSemanticValue;
+            DECLSemanticValue declSemanticValue;
+            EXPRSemanticValue exprSemanticValue;
+	    CON_Type *const1;
 	} semantic_value;
 };
 typedef struct AST_NODE AST_NODE;

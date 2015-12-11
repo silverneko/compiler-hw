@@ -93,6 +93,7 @@ static inline AST_NODE* makeDeclNode(DECL_KIND declKind)
 static inline AST_NODE* makeExprNode(EXPR_KIND exprKind, int operationEnumValue)
 {
     AST_NODE* exprNode = Allocate(EXPR_NODE);
+    exprNode->semantic_value.exprSemanticValue.dataType = NONE_TYPE;
     exprNode->semantic_value.exprSemanticValue.isConstEval = 0;
     exprNode->semantic_value.exprSemanticValue.kind = exprKind;
     if (exprKind == BINARY_OPERATION) {
