@@ -694,35 +694,43 @@ TypeDescriptor * exprType(AST_NODE * node){
   // TODO : return the kind of the expression, scalar or array
   TypeDescriptor * typedesc = malloc(sizeof(TypeDescriptor));
   typedesc->kind = SCALAR_TYPE_DESCRIPTOR;
-  switch(node->semantic_value.identifierSemanticValue.kind){
-    case ARRAY_ID:
-    case NORMAL_ID:
-    {
-      SymbolTableEntry * arr = retrieveSymbol(idName(node));
-      if(arr == NULL){
-        printErrorMsg(node, SYMBOL_UNDECLARED);
-        return NULL;
-      }
-      if(arr->symbolAttribute->typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR){
+  if(node->nodeType == IDENTIFIER_NODE){
+    switch(node->semantic_value.identifierSemanticValue.kind){
+      case ARRAY_ID:
+      case NORMAL_ID:
+      {
+        SymbolTableEntry * arr = retrieveSymbol(idName(node));
+        if(arr == NULL){
+          return NULL;
+        }
+        if(arr->symbolAttribute->typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR){
+          break;
+        }
+        // array type
+        typedesc->kind = ARRAY_TYPE_DESCRIPTOR;
+        AST_NODE * dims = node->child;
+        int dimsn = 0;
+        while(dims != NULL){
+          ++dimsn;
+          dims = dims->rightSibling;
+        }
+        typedesc->arrayProperties.dimension = arr->symbolAttribute->typeDescriptor->arrayProperties.dimension - dimsn;
+        if(typedesc->arrayProperties.dimension == 0){
+          typedesc->kind = SCALAR_TYPE_DESCRIPTOR;
+          break;
+        }else if(typedesc->arrayProperties.dimension < 0){
+          typedesc->kind = SCALAR_TYPE_DESCRIPTOR;
+          break;
+        }
+        for(int i = 0; i < typedesc->arrayProperties.dimension; ++i){
+          typedesc->arrayProperties.sizeInEachDimension[i] = 
+            arr->symbolAttribute->typeDescriptor->arrayProperties.sizeInEachDimension[dimsn + i];
+        }
         break;
       }
-      // array type
-      typedesc->kind = ARRAY_TYPE_DESCRIPTOR;
-      AST_NODE * dims = node->child;
-      int dimsn = 0;
-      while(dims != NULL){
-        ++dimsn;
-        dims = dims->rightSibling;
-      }
-      typedesc->arrayProperties.dimension = arr->symbolAttribute->typeDescriptor->arrayProperties.dimension - dimsn;
-      for(int i = 0; i < typedesc->arrayProperties.dimension; ++i){
-        typedesc->arrayProperties.sizeInEachDimension[i] = 
-          arr->symbolAttribute->typeDescriptor->arrayProperties.sizeInEachDimension[dimsn + i];
-      }
-      break;
+      default:
+        break;
     }
-    default:
-      break;
   }
   return typedesc;
 }
@@ -763,6 +771,7 @@ DATA_TYPE checkFunctionCall(AST_NODE* functionCallNode){
 }
 
 void checkParameterPassing(Parameter * param, AST_NODE * arg){
+  checkAssignOrExpr(arg);
   TypeDescriptor * typeDesc = exprType(arg);
   if(typeDesc == NULL){
     return ;

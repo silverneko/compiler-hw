@@ -6,6 +6,7 @@ int main(){
 	int b[(3 + 100) * 2][3];
 	fun(b[3]);
 	fun(b[3][10]);
-        fun(b[0][1] + c);
+        a = b[0][1] + c[0];
+        fun(b[0] + c);
 	return 0;
 }
