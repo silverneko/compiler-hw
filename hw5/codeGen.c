@@ -10,7 +10,7 @@ void emitCode(AST_NODE *);
 void emitProgramNode(AST_NODE *);
 void emitGlobalDeclarations(AST *);
 void emitGlobalDeclaration(AST *);
-void emitFunctionDeclarationNode(AST *);
+void emitFunctionDeclaration(AST *);
 void emitAlignment();
 
 char * idName(AST * node);
@@ -38,7 +38,7 @@ void emitProgramNode(AST_NODE * root){
       emitGlobalDeclarations(decls);
     }else{
       // function decl
-      emitFunctionDeclarationNode(decls);
+      emitFunctionDeclaration(decls);
     }
     decls = decls->rightSibling;
   }
@@ -122,7 +122,66 @@ void emitGlobalDeclaration(AST * decl){
   }
 }
 
-void emitFunctionDeclarationNode(AST * decl){
-  
+void emitFunctionDeclaration(AST * node){
+  AST * returnTypeNode = node->child;
+  AST * functionNameID = returnTypeNode->rightSibling;
+  SymbolAttribute * attribute = NULL;
+  attribute = (SymbolAttribute*)malloc(sizeof(SymbolAttribute));
+  attribute->attributeKind = FUNCTION_SIGNATURE;
+  attribute->attr.functionSignature = (FunctionSignature*)malloc(sizeof(FunctionSignature));
+  attribute->attr.functionSignature->returnType = returnTypeNode->dataType;
+  attribute->attr.functionSignature->parameterList = NULL;
+
+  enterSymbol(idName(functionNameID), attribute);
+
+  openScope();
+
+  AST_NODE * parameterListNode = functionNameID->rightSibling;
+  AST_NODE * traverseParameter = parameterListNode->child;
+  int parametersCount = 0;
+  if(traverseParameter)
+  {
+    ++parametersCount;
+    processDeclarationNode(traverseParameter);
+    AST_NODE *parameterID = traverseParameter->child->rightSibling;
+    Parameter *parameter = (Parameter*)malloc(sizeof(Parameter));
+    parameter->next = NULL;
+    parameter->parameterName = parameterID->semantic_value.identifierSemanticValue.identifierName;
+    parameter->type = parameterID->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor;
+    attribute->attr.functionSignature->parameterList = parameter;
+    traverseParameter = traverseParameter->rightSibling;
+  }
+
+  Parameter *parameterListTail = attribute->attr.functionSignature->parameterList;
+
+  while(traverseParameter)
+  {
+    ++parametersCount;
+    processDeclarationNode(traverseParameter);
+    AST_NODE *parameterID = traverseParameter->child->rightSibling;
+    Parameter *parameter = (Parameter*)malloc(sizeof(Parameter));
+    parameter->next = NULL;
+    parameter->parameterName = parameterID->semantic_value.identifierSemanticValue.identifierName;
+    parameter->type = parameterID->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor;
+    parameterListTail->next = parameter;
+    parameterListTail = parameter;
+    traverseParameter = traverseParameter->rightSibling;
+  }
+  attribute->attr.functionSignature->parametersCount = parametersCount;
+
+  /* Prologue start */
+  fprintf(adotout, ".text\n");
+  fprintf(adotout, "_start_%s:\n", idName(functionNameID));
+
+  AST_NODE *blockNode = parameterListNode->rightSibling;
+  AST_NODE *traverseListNode = blockNode->child;
+  while(traverseListNode)
+  {
+    // TODO
+    // processGeneralNode(traverseListNode);
+    traverseListNode = traverseListNode->rightSibling;
+  }
+
+  closeScope();
 }
 
