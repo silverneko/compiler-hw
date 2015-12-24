@@ -13,8 +13,11 @@ INT g7[2];
 FLOAT g8[2];
 INTA g9;
 FLOATA g10;
+int g11[2][12];
+INTA g12[12];
+INTA g13[4][3];
 
-int main() {
+int MAIN() {
     int l1;
     float l2;
     INT l3;
