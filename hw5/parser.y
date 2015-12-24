@@ -770,6 +770,11 @@ char *argv[];
      if (!g_anyErrorOccur) {
         printf("Parsing completed. No errors found.\n");
      }
+     initializeSymbolTable();
+
+     emitCode(prog);
+
+     symbolTableEnd();
   } /* main */
 
 
