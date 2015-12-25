@@ -14,12 +14,15 @@ void emitFunctionDeclaration(AST *);
 void emitLocalDeclarations(AST *);
 int emitLocalDeclaration(AST *, int);
 void emitSaveArgs(int parametersCount);
-void emitPrologue();
+void emitPrologue(AST *);
 void emitEpilogue();
 void emitStatementList(AST *);
 void emitStatement(AST *);
 void emitAssignmentStmt(AST_NODE* assignmentNode);
 int emitExprRelatedNode(AST_NODE* exprRelatedNode);
+void emitFunctionCall(AST_NODE* functionCallNode);
+void emitWriteFunction(AST *);
+void emitGeneralNode(AST *);
 
 void emitAlignment();
 char * idName(AST * node);
@@ -80,7 +83,15 @@ void emitLocalDeclarations(AST * root){
     offset += emitLocalDeclaration(decls, offset + 96);
     decls = decls->rightSibling;
   }
-  fprintf(adotout, "\tadd sp, sp, #%d\n", -offset);
+  fprintf(adotout, ".data\n");
+  fprintf(adotout, "\t_integer_const_%d: .word %d\n", _const, offset);
+  emitAlignment();
+  fprintf(adotout, ".text\n");
+  int reg = getReg();
+  fprintf(adotout, "\tldr w%d, _integer_const_%d\n", reg, _const);
+  ++_const;
+  freeReg(reg);
+  fprintf(adotout, "\tsub sp, sp, w%d\n", reg);
 }
 
 int emitLocalDeclaration(AST * decl, int _offset){
@@ -211,7 +222,7 @@ void emitGlobalDeclaration(AST * decl){
         }
         if(decl->semantic_value.declSemanticValue.kind == VARIABLE_DECL){
           if(attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR){
-            fprintf(adotout, "\t_%s: .word\n", idName(idlist));
+            fprintf(adotout, "\t_%s: .word 0\n", idName(idlist));
           }else{
             int arraySize = 4;
             int arrayDim = attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
@@ -233,6 +244,60 @@ void emitGlobalDeclaration(AST * decl){
       exit(1);
   }
 }
+
+/*
+void emitGeneralNode(AST_NODE *node){
+  AST_NODE *traverseChildren = node->child;
+  switch(node->nodeType){
+    case VARIABLE_DECL_LIST_NODE:
+      while(traverseChildren)
+      {
+        processDeclarationNode(traverseChildren);
+        if(traverseChildren->dataType == ERROR_TYPE)
+        {
+          node->dataType = ERROR_TYPE;
+        }
+        traverseChildren = traverseChildren->rightSibling;
+      }
+      break;
+    case STMT_LIST_NODE:
+      while(traverseChildren)
+      {
+        processStmtNode(traverseChildren);
+        if(traverseChildren->dataType == ERROR_TYPE)
+        {
+          node->dataType = ERROR_TYPE;
+        }
+        traverseChildren = traverseChildren->rightSibling;
+      }
+      break;
+    case NONEMPTY_ASSIGN_EXPR_LIST_NODE:
+      while(traverseChildren)
+      {
+        checkAssignOrExpr(traverseChildren);
+        if(traverseChildren->dataType == ERROR_TYPE)
+        {
+          node->dataType = ERROR_TYPE;
+        }
+        traverseChildren = traverseChildren->rightSibling;
+      }
+      break;
+    case NONEMPTY_RELOP_EXPR_LIST_NODE:
+      while(traverseChildren)
+      {
+        processExprRelatedNode(traverseChildren);
+        if(traverseChildren->dataType == ERROR_TYPE)
+        {
+          node->dataType = ERROR_TYPE;
+        }
+        traverseChildren = traverseChildren->rightSibling;
+      }
+      break;
+    case NUL_NODE:
+      break;
+  }
+}
+*/
 
 void emitStatementList(AST * node){
   node = node->child;
@@ -263,17 +328,81 @@ void emitStatement(AST * stmtNode){
         checkIfStmt(stmtNode);
         break;
       case FUNCTION_CALL_STMT:
-        checkFunctionCall(stmtNode);
+        emitFunctionCall(stmtNode);
         break;
       case RETURN_STMT:
         checkReturnStmt(stmtNode);
         break;
-      default:
-        printf("Unhandle case in void processStmtNode(AST_NODE* stmtNode)\n");
-        stmtNode->dataType = ERROR_TYPE;
-        break;
     }
   }
+}
+
+void emitWriteFunction(AST_NODE* functionCallNode){
+    AST_NODE* functionIDNode = functionCallNode->child;
+    AST_NODE* actualParameterList = functionIDNode->rightSibling;
+    AST_NODE* actualParameter = actualParameterList->child;
+
+    int reg = emitExprRelatedNode(actualParameter);
+    switch(actualParameter->dataType){
+      case INT_TYPE:
+        fprintf(adotout, "\tmov w0, w%d\n", reg);
+        fprintf(adotout, "\tbl _write_int\n");
+        break;
+      case FLOAT_TYPE:
+        fprintf(adotout, "\tfmov s0, s%d\n", reg);
+        fprintf(adotout, "\tbl _write_float\n");
+        break;
+      case CONST_STRING_TYPE:
+        fprintf(adotout, "\tmov x0, x%d\n", reg);
+        fprintf(adotout, "\tbl _write_str\n");
+        break;
+    }
+    freeReg(reg);
+
+    functionCallNode->dataType = VOID_TYPE;
+}
+
+void emitFunctionCall(AST_NODE* functionCallNode){
+    AST_NODE* functionIDNode = functionCallNode->child;
+
+    //special case
+    if(strcmp(functionIDNode->semantic_value.identifierSemanticValue.identifierName, "write") == 0)
+    {
+        emitWriteFunction(functionCallNode);
+        return;
+    }
+
+    /* TODO below */
+
+    SymbolTableEntry* symbolTableEntry = retrieveSymbol(functionIDNode->semantic_value.identifierSemanticValue.identifierName);
+    functionIDNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
+
+    AST_NODE* actualParameterList = functionIDNode->rightSibling;
+    processGeneralNode(actualParameterList);
+
+    AST_NODE* actualParameter = actualParameterList->child;
+    Parameter* formalParameter = symbolTableEntry->attribute->attr.functionSignature->parameterList;
+
+    int parameterPassingError = 0;
+    while(actualParameter && formalParameter)
+    {
+        if(actualParameter->dataType == ERROR_TYPE)
+        {
+            parameterPassingError = 1;
+        }
+        else
+        {
+            checkParameterPassing(formalParameter, actualParameter);
+            if(actualParameter->dataType == ERROR_TYPE)
+            {
+                parameterPassingError = 1;
+            }
+        }
+        actualParameter = actualParameter->rightSibling;
+        formalParameter = formalParameter->next;
+    }
+    
+        functionCallNode->dataType = symbolTableEntry->attribute->attr.functionSignature->returnType;
 }
 
 void emitAssignmentStmt(AST_NODE* assignmentNode)
@@ -281,7 +410,6 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
     AST_NODE* idNode = assignmentNode->child;
     AST_NODE* rightOp = idNode->rightSibling;
     int resultReg = emitExprRelatedNode(rightOp);
-    // processVariableLValue(leftOp);
     SymbolTableEntry *symbolTableEntry = retrieveSymbol(idNode->semantic_value.identifierSemanticValue.identifierName);
     idNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
     TypeDescriptor *typeDescriptor = idNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor;
@@ -290,11 +418,19 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
       if(symbolTableEntry->attribute->global){
         int reg = getReg();
         fprintf(adotout, "\tldr x%d, =_%s\n", reg, idName(idNode));
-        fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+        if(rightOp->dataType == INT_TYPE){
+          fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+        }else{
+          fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
+        }
         freeReg(reg);
       }else{
         int offset = symbolTableEntry->attribute->offset;
-        fprintf(adotout, "\tstr w%d, [x29, #%d]\n", resultReg, -offset);
+        if(rightOp->dataType == INT_TYPE){
+          fprintf(adotout, "\tstr w%d, [x29, #%d]\n", resultReg, -offset);
+        }else{
+          fprintf(adotout, "\tstr s%d, [x29, #%d]\n", resultReg, -offset);
+        }
       }
     }else{
         idNode->dataType = typeDescriptor->properties.arrayProperties.elementType;
@@ -306,7 +442,7 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
         while(traverseDimList){
           int indexReg = emitExprRelatedNode(traverseDimList);
           int _reg = getReg();
-          fprintf(adotout, "\tldr x%d, =%d\n", _reg, arrayDims[dimension]);
+          fprintf(adotout, "\tmov x%d, #%d\n", _reg, arrayDims[dimension]);
           fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
           fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
           freeReg(indexReg);
@@ -317,9 +453,13 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
         int offset = symbolTableEntry->attribute->offset;
         int _reg = getReg();
         fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
-        fprintf(adotout, "\tldr x%d, =%d\n", _reg, -offset);
+        fprintf(adotout, "\tmov x%d, #%d\n", _reg, -offset);
         fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
-        fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+        if(rightOp->dataType == INT_TYPE){
+          fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+        }else{
+          fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
+        }
         freeReg(_reg);
         freeReg(reg);
     }
@@ -338,7 +478,59 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
       checkFunctionCall(exprRelatedNode);
       break;
     case IDENTIFIER_NODE:
-      processVariableRValue(exprRelatedNode);
+      // emitVariableRValue(exprRelatedNode);
+      {
+        AST_NODE* idNode = exprRelatedNode;
+        SymbolTableEntry *symbolTableEntry = retrieveSymbol(idNode->semantic_value.identifierSemanticValue.identifierName);
+        idNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
+        TypeDescriptor *typeDescriptor = idNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor;
+        if(idNode->semantic_value.identifierSemanticValue.kind == NORMAL_ID){
+          idNode->dataType = typeDescriptor->properties.dataType;
+          if(symbolTableEntry->attribute->global){
+            if(idNode->dataType == INT_TYPE){
+              fprintf(adotout, "\tldr w%d, _%s\n", reg, idName(idNode));
+            }else{
+              fprintf(adotout, "\tldr s%d, _%s\n", reg, idName(idNode));
+            }
+          }else{
+            int offset = symbolTableEntry->attribute->offset;
+            if(idNode->dataType == INT_TYPE){
+              fprintf(adotout, "\tldr w%d, [x29, #%d]\n", reg, -offset);
+            }else{
+              fprintf(adotout, "\tldr s%d, [x29, #%d]\n", reg, -offset);
+            }
+          }
+        }else{
+          idNode->dataType = typeDescriptor->properties.arrayProperties.elementType;
+          int dimension = 0;
+          int * arrayDims = typeDescriptor->properties.arrayProperties.sizeInEachDimension;
+          AST_NODE *traverseDimList = idNode->child;
+          fprintf(adotout, "\tmov x%d, #0\n", reg);
+          while(traverseDimList){
+            int indexReg = emitExprRelatedNode(traverseDimList);
+            int _reg = getReg();
+            fprintf(adotout, "\tmov x%d, #%d\n", _reg, arrayDims[dimension]);
+            fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
+            fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
+            freeReg(indexReg);
+            freeReg(_reg);
+            traverseDimList = traverseDimList->rightSibling;
+            ++dimension;
+          }
+          int offset = symbolTableEntry->attribute->offset;
+          int _reg = getReg();
+          fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
+          fprintf(adotout, "\tmov x%d, #%d\n", _reg, -offset);
+          fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
+          if(idNode->dataType == INT_TYPE){
+            fprintf(adotout, "\tldr w%d, [x%d, #0]\n", reg, reg);
+          }else{
+            fprintf(adotout, "\tldr s%d, [x%d, #0]\n", reg, reg);
+          }
+          freeReg(_reg);
+          freeReg(reg);
+        }
+      }
       break;
     case CONST_VALUE_NODE:
       switch(exprRelatedNode->semantic_value.const1->const_type){
@@ -346,7 +538,12 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           exprRelatedNode->dataType = INT_TYPE;
           exprRelatedNode->semantic_value.exprSemanticValue.constEvalValue.iValue =
             exprRelatedNode->semantic_value.const1->const_u.intval;
-          fprintf(adotout, "ldr x%d, =%d\n", reg, exprRelatedNode->semantic_value.const1->const_u.intval);
+          fprintf(adotout, ".data\n");
+          fprintf(adotout, "_integer_const_%d: .word %d\n", _const, exprRelatedNode->semantic_value.const1->const_u.intval);
+          emitAlignment();
+          fprintf(adotout, ".text\n");
+          fprintf(adotout, "ldr w%d, _integer_const_%d\n", reg, _const);
+          _const++;
           break;
         case FLOATC:
           exprRelatedNode->dataType = FLOAT_TYPE;
@@ -360,8 +557,13 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           _const++;
           break;
         case STRINGC:
-          /* TODO */
           exprRelatedNode->dataType = CONST_STRING_TYPE;
+          fprintf(adotout, ".data\n");
+          fprintf(adotout, "_string_const_%d: .ascii %s\n", _const, exprRelatedNode->semantic_value.const1->const_u.sc);
+          emitAlignment();
+          fprintf(adotout, ".text\n");
+          fprintf(adotout, "ldr x%d, =_string_const_%d\n", reg, _const);
+          _const++;
           break;
       }
       break;
@@ -419,7 +621,7 @@ void emitFunctionDeclaration(AST * node){
   /* Prologue start */
   fprintf(adotout, ".text\n");
   fprintf(adotout, "_start_%s:\n", idName(functionNameID));
-  emitPrologue();
+  emitPrologue(functionNameID);
   // emitSaveArgs(parametersCount);
 
   AST_NODE *blockNode = parameterListNode->rightSibling;
@@ -453,7 +655,7 @@ void emitSaveArgs(int parametersCount){
   /* hw5 only need to implement parameter less function */
 }
 
-void emitPrologue(){
+void emitPrologue(AST * node){
   fprintf(adotout, "\tstr x30, [sp, #0]\n");
   fprintf(adotout, "\tstr x29, [sp, #-8]\n");
   fprintf(adotout, "\tadd x29, sp, #-8\n");
@@ -463,7 +665,12 @@ void emitPrologue(){
     fprintf(adotout, "\tstr x%d, [x29, #%d]\n", i, -8 - offset);
     offset += 8;
   }
-  fprintf(adotout, "\tadd sp, sp, #%d\n", -offset);
+  fprintf(adotout, ".data\n");
+  fprintf(adotout, "_AR_SIZE_%s: .word %d\n", idName(node), offset);
+  emitAlignment();
+  fprintf(adotout, ".text\n");
+  fprintf(adotout, "\tldr w19, _AR_SIZE_%s\n", idName(node));
+  fprintf(adotout, "\tsub sp, sp, w19\n");
 }
 
 void emitEpilogue(){
