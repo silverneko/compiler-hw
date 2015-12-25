@@ -433,35 +433,40 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
         }
       }
     }else{
-        idNode->dataType = typeDescriptor->properties.arrayProperties.elementType;
-        int dimension = 0;
-        int * arrayDims = typeDescriptor->properties.arrayProperties.sizeInEachDimension;
-        AST_NODE *traverseDimList = idNode->child;
-        int reg = getReg();
-        fprintf(adotout, "\tmov x%d, #0\n", reg);
-        while(traverseDimList){
-          int indexReg = emitExprRelatedNode(traverseDimList);
-          int _reg = getReg();
-          fprintf(adotout, "\tmov x%d, #%d\n", _reg, arrayDims[dimension]);
-          fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
-          fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
-          freeReg(indexReg);
-          freeReg(_reg);
-          traverseDimList = traverseDimList->rightSibling;
-          ++dimension;
-        }
-        int offset = symbolTableEntry->attribute->offset;
+      idNode->dataType = typeDescriptor->properties.arrayProperties.elementType;
+      int dimension = 0;
+      int * arrayDims = typeDescriptor->properties.arrayProperties.sizeInEachDimension;
+      AST_NODE *traverseDimList = idNode->child;
+      int reg = getReg();
+      fprintf(adotout, "\tmov x%d, #0\n", reg);
+      while(traverseDimList){
+        int indexReg = emitExprRelatedNode(traverseDimList);
         int _reg = getReg();
+        fprintf(adotout, "\tmov x%d, #%d\n", _reg, arrayDims[dimension]);
+        fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
+        fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
+        fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
+        freeReg(indexReg);
+        freeReg(_reg);
+        traverseDimList = traverseDimList->rightSibling;
+        ++dimension;
+      }
+      int offset = symbolTableEntry->attribute->offset;
+      int _reg = getReg();
+      if(symbolTableEntry->attribute->global){
+        fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
+      }else{
         fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
         fprintf(adotout, "\tmov x%d, #%d\n", _reg, -offset);
-        fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
-        if(rightOp->dataType == INT_TYPE){
-          fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
-        }else{
-          fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
-        }
-        freeReg(_reg);
-        freeReg(reg);
+      }
+      fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
+      if(rightOp->dataType == INT_TYPE){
+        fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+      }else{
+        fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
+      }
+      freeReg(_reg);
+      freeReg(reg);
     }
     freeReg(resultReg);
     assignmentNode->dataType = getBiggerType(idNode->dataType, rightOp->dataType);
@@ -511,6 +516,7 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
             int _reg = getReg();
             fprintf(adotout, "\tmov x%d, #%d\n", _reg, arrayDims[dimension]);
             fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
+            fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
             fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
             freeReg(indexReg);
             freeReg(_reg);
@@ -519,8 +525,12 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           }
           int offset = symbolTableEntry->attribute->offset;
           int _reg = getReg();
-          fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
-          fprintf(adotout, "\tmov x%d, #%d\n", _reg, -offset);
+          if(symbolTableEntry->attribute->global){
+            fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
+          }else{
+            fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
+            fprintf(adotout, "\tmov x%d, #%d\n", _reg, -offset);
+          }
           fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
           if(idNode->dataType == INT_TYPE){
             fprintf(adotout, "\tldr w%d, [x%d, #0]\n", reg, reg);
@@ -528,7 +538,6 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
             fprintf(adotout, "\tldr s%d, [x%d, #0]\n", reg, reg);
           }
           freeReg(_reg);
-          freeReg(reg);
         }
       }
       break;
