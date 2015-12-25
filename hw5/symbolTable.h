@@ -65,6 +65,7 @@ typedef struct SymbolAttribute
 
     int offset;
     int global;
+    int place;
 
     union
     {
