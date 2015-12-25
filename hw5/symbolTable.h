@@ -63,6 +63,9 @@ typedef struct SymbolAttribute
 {
     SymbolAttributeKind attributeKind;
 
+    int offset;
+    int global;
+
     union
     {
         TypeDescriptor* typeDescriptor;
