@@ -25,6 +25,7 @@ void emitWriteFunction(AST *);
 void emitGeneralNode(AST *);
 int emitExprNode(AST_NODE* exprNode);
 void emitWhileStmt(AST * stmtNode);
+void emitIfStmt(AST_NODE* ifNode);
 
 void emitAlignment();
 char * idName(AST * node);
@@ -318,7 +319,6 @@ void emitStatement(AST * stmtNode){
   }else{
     switch(stmtNode->semantic_value.stmtSemanticValue.kind){
       case WHILE_STMT:
-      /* TODO */
         emitWhileStmt(stmtNode);
         break;
       case FOR_STMT:
@@ -328,8 +328,7 @@ void emitStatement(AST * stmtNode){
         emitAssignmentStmt(stmtNode);
         break;
       case IF_STMT:
-      /* TODO */
-        checkIfStmt(stmtNode);
+        emitIfStmt(stmtNode);
         break;
       case FUNCTION_CALL_STMT:
         emitFunctionCall(stmtNode);
@@ -341,10 +340,27 @@ void emitStatement(AST * stmtNode){
   }
 }
 
+void emitIfStmt(AST_NODE* ifNode){
+    AST_NODE* boolExpression = ifNode->child;
+    AST_NODE* ifBodyNode = boolExpression->rightSibling;
+    AST_NODE* elsePartNode = ifBodyNode->rightSibling;
+    // checkAssignOrExpr(boolExpression);
+    int wn = _const++;
+    fprintf(adotout, "_IF_%d:\n", wn);
+    int reg = emitExprRelatedNode(boolExpression);
+    fprintf(adotout, "cmp w%d, #0\n", reg);
+    fprintf(adotout, "beq _ELSE_%d\n", wn);
+    emitStatement(ifBodyNode);
+    fprintf(adotout, "b _END_IF_%d\n", wn);
+    fprintf(adotout, "_ELSE_%d:\n", wn);
+    emitStatement(elsePartNode);
+    fprintf(adotout, "_END_IF_%d:\n", wn);
+}
+
 void emitWhileStmt(AST * whileNode){
   AST_NODE* boolExpression = whileNode->child;
   AST_NODE* bodyNode = boolExpression->rightSibling;
-  //checkAssignOrExpr(boolExpression);
+  // checkAssignOrExpr(boolExpression);
   int wn = _const++;
   fprintf(adotout, "_WHILE_%d:\n", wn);
   int reg = emitExprRelatedNode(boolExpression);
