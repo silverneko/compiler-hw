@@ -14,7 +14,7 @@ void emitFunctionDeclaration(AST *);
 void emitLocalDeclarations(AST *);
 int emitLocalDeclaration(AST *, int);
 void emitSaveArgs(int parametersCount);
-void emitPrologue(AST *);
+void emitPrologue();
 void emitEpilogue();
 void emitStatementList(AST *);
 void emitStatement(AST *);
@@ -29,6 +29,7 @@ void emitIfStmt(AST_NODE* ifNode);
 void emitReturnStmt(AST *);
 int emitIntLiteral(int);
 int emitFloatLiteral(float);
+void emitBlockNode(AST_NODE* blockNode);
 
 void emitAlignment();
 char * idName(AST * node);
@@ -333,8 +334,7 @@ void emitStatement(AST * stmtNode){
   if(stmtNode->nodeType == NUL_NODE){
     return;
   }else if(stmtNode->nodeType == BLOCK_NODE){
-    /* TODO */
-    processBlockNode(stmtNode);
+    emitBlockNode(stmtNode);
   }else{
     switch(stmtNode->semantic_value.stmtSemanticValue.kind){
       case WHILE_STMT:
@@ -421,8 +421,7 @@ void emitFunctionCall(AST_NODE* functionCallNode){
     AST_NODE* functionIDNode = functionCallNode->child;
 
     //special case
-    if(strcmp(functionIDNode->semantic_value.identifierSemanticValue.identifierName, "write") == 0)
-    {
+    if(strcmp(functionIDNode->semantic_value.identifierSemanticValue.identifierName, "write") == 0){
         emitWriteFunction(functionCallNode);
         return;
     }
@@ -574,15 +573,15 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           AST_NODE *traverseDimList = idNode->child;
           fprintf(adotout, "\tmov x%d, #0\n", reg);
           while(traverseDimList){
-            int indexReg = emitExprRelatedNode(traverseDimList);
-            int _reg = getReg();
             int id = emitIntLiteral(arrayDims[dimension]);
+            int _reg = getReg();
             fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
             fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
+            freeReg(_reg);
+            int indexReg = emitExprRelatedNode(traverseDimList);
             fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
             fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
             freeReg(indexReg);
-            freeReg(_reg);
             traverseDimList = traverseDimList->rightSibling;
             ++dimension;
           }
@@ -595,13 +594,13 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
             int id = emitIntLiteral(-offset);
             fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
           }
+          freeReg(_reg);
           fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
           if(idNode->dataType == INT_TYPE){
             fprintf(adotout, "\tldr w%d, [x%d, #0]\n", reg, reg);
           }else{
             fprintf(adotout, "\tldr s%d, [x%d, #0]\n", reg, reg);
           }
-          freeReg(_reg);
         }
       }
       break;
@@ -675,7 +674,21 @@ int emitExprNode(AST_NODE* exprNode){
       return reg;
     }else{
       int reg1 = emitExprRelatedNode(leftOp);
+      freeReg(reg1);
+      if(leftOp->dataType == INT_TYPE){
+        fprintf(adotout, "str w%d, [sp, #0]\n", reg1);
+      }else{
+        fprintf(adotout, "str s%d, [sp, #0]\n", reg1);
+      }
+      fprintf(adotout, "sub sp, sp, #8\n");
       int reg2 = emitExprRelatedNode(rightOp);
+      fprintf(adotout, "add sp, sp, #8\n");
+      reg1 = getReg();
+      if(leftOp->dataType == INT_TYPE){
+        fprintf(adotout, "ldr w%d, [sp, #0]\n", reg1);
+      }else{
+        fprintf(adotout, "ldr s%d, [sp, #0]\n", reg1);
+      }
       if(leftOp->dataType == INT_TYPE && rightOp->dataType == INT_TYPE){
         switch(exprNode->semantic_value.exprSemanticValue.op.binaryOp){
           case BINARY_OP_ADD:
@@ -813,6 +826,7 @@ int emitExprNode(AST_NODE* exprNode){
             fprintf(adotout, "\tfneg s%d, s%d", reg, reg);
             break;
           case UNARY_OP_LOGICAL_NEGATION:
+            /* TODO type conversion */
             break;
         }
       }
@@ -873,14 +887,13 @@ void emitFunctionDeclaration(AST * node){
   /* Prologue start */
   fprintf(adotout, ".text\n");
   fprintf(adotout, "_start_%s:\n", idName(functionNameID));
-  emitPrologue(functionNameID);
+  emitPrologue();
   // emitSaveArgs(parametersCount);
 
   AST_NODE *blockNode = parameterListNode->rightSibling;
   AST_NODE *traverseListNode = blockNode->child;
   int offset;
-  while(traverseListNode)
-  {
+  while(traverseListNode){
     switch(traverseListNode->nodeType){
       case VARIABLE_DECL_LIST_NODE:
         emitLocalDeclarations(traverseListNode);
@@ -900,12 +913,50 @@ void emitFunctionDeclaration(AST * node){
   closeScope();
 }
 
+void emitBlockNode(AST_NODE* blockNode){
+    openScope();
+
+    AST_NODE *traverseListNode = blockNode->child;
+    int id = _const++;
+    fprintf(adotout, ".data\n");
+    fprintf(adotout, "_OLD_SP_%d: .skip 8\n", id);
+    fprintf(adotout, ".text\n");
+    int reg = getReg(), reg2 = getReg();
+    freeReg(reg);
+    freeReg(reg2);
+    fprintf(adotout, "ldr x%d, =_OLD_SP_%d\n", reg, id);
+    fprintf(adotout, "mov x%d, sp\n", reg2);
+    fprintf(adotout, "str x%d, [x%d, #0]\n", reg2, reg);
+    while(traverseListNode){
+      switch(traverseListNode->nodeType){
+        case VARIABLE_DECL_LIST_NODE:
+          emitLocalDeclarations(traverseListNode);
+          break;
+        case STMT_LIST_NODE:
+          emitStatementList(traverseListNode);
+          break;
+      }
+      traverseListNode = traverseListNode->rightSibling;
+    }
+    reg = getReg();
+    reg2 = getReg();
+    freeReg(reg);
+    freeReg(reg2);
+    fprintf(adotout, "ldr x%d, =_OLD_SP_%d\n", reg, id);
+    fprintf(adotout, "ldr x%d, [x%d, #0]\n", reg2, reg);
+    fprintf(adotout, "mov sp, x%d\n", reg2);
+
+    closeScope();
+}
+
+
+
 void emitSaveArgs(int parametersCount){
   /* TODO */
   /* hw5 only need to implement parameter less function */
 }
 
-void emitPrologue(AST * node){
+void emitPrologue(){
   fprintf(adotout, "\tstr x30, [sp, #0]\n");
   fprintf(adotout, "\tstr x29, [sp, #-8]\n");
   fprintf(adotout, "\tadd x29, sp, #-8\n");
@@ -916,11 +967,12 @@ void emitPrologue(AST * node){
     offset += 8;
   }
   fprintf(adotout, ".data\n");
-  fprintf(adotout, "_AR_SIZE_%s: .word %d\n", idName(node), offset);
+  fprintf(adotout, "_AR_SIZE_%d: .word %d\n", _const, offset);
   emitAlignment();
   fprintf(adotout, ".text\n");
-  fprintf(adotout, "\tldr w19, _AR_SIZE_%s\n", idName(node));
+  fprintf(adotout, "\tldr w19, _AR_SIZE_%d\n", _const);
   fprintf(adotout, "\tsub sp, sp, w19\n");
+  ++_const;
 }
 
 void emitEpilogue(){
