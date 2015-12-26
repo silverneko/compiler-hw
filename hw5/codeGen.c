@@ -269,58 +269,58 @@ void emitGlobalDeclaration(AST * decl){
 }
 
 /*
-void emitGeneralNode(AST_NODE *node){
-  AST_NODE *traverseChildren = node->child;
-  switch(node->nodeType){
-    case VARIABLE_DECL_LIST_NODE:
-      while(traverseChildren)
-      {
-        processDeclarationNode(traverseChildren);
-        if(traverseChildren->dataType == ERROR_TYPE)
-        {
-          node->dataType = ERROR_TYPE;
-        }
-        traverseChildren = traverseChildren->rightSibling;
-      }
-      break;
-    case STMT_LIST_NODE:
-      while(traverseChildren)
-      {
-        processStmtNode(traverseChildren);
-        if(traverseChildren->dataType == ERROR_TYPE)
-        {
-          node->dataType = ERROR_TYPE;
-        }
-        traverseChildren = traverseChildren->rightSibling;
-      }
-      break;
-    case NONEMPTY_ASSIGN_EXPR_LIST_NODE:
-      while(traverseChildren)
-      {
-        checkAssignOrExpr(traverseChildren);
-        if(traverseChildren->dataType == ERROR_TYPE)
-        {
-          node->dataType = ERROR_TYPE;
-        }
-        traverseChildren = traverseChildren->rightSibling;
-      }
-      break;
-    case NONEMPTY_RELOP_EXPR_LIST_NODE:
-      while(traverseChildren)
-      {
-        processExprRelatedNode(traverseChildren);
-        if(traverseChildren->dataType == ERROR_TYPE)
-        {
-          node->dataType = ERROR_TYPE;
-        }
-        traverseChildren = traverseChildren->rightSibling;
-      }
-      break;
-    case NUL_NODE:
-      break;
-  }
-}
-*/
+   void emitGeneralNode(AST_NODE *node){
+   AST_NODE *traverseChildren = node->child;
+   switch(node->nodeType){
+   case VARIABLE_DECL_LIST_NODE:
+   while(traverseChildren)
+   {
+   processDeclarationNode(traverseChildren);
+   if(traverseChildren->dataType == ERROR_TYPE)
+   {
+   node->dataType = ERROR_TYPE;
+   }
+   traverseChildren = traverseChildren->rightSibling;
+   }
+   break;
+   case STMT_LIST_NODE:
+   while(traverseChildren)
+   {
+   processStmtNode(traverseChildren);
+   if(traverseChildren->dataType == ERROR_TYPE)
+   {
+   node->dataType = ERROR_TYPE;
+   }
+   traverseChildren = traverseChildren->rightSibling;
+   }
+   break;
+   case NONEMPTY_ASSIGN_EXPR_LIST_NODE:
+   while(traverseChildren)
+   {
+   checkAssignOrExpr(traverseChildren);
+   if(traverseChildren->dataType == ERROR_TYPE)
+   {
+   node->dataType = ERROR_TYPE;
+   }
+   traverseChildren = traverseChildren->rightSibling;
+   }
+   break;
+   case NONEMPTY_RELOP_EXPR_LIST_NODE:
+   while(traverseChildren)
+   {
+   processExprRelatedNode(traverseChildren);
+   if(traverseChildren->dataType == ERROR_TYPE)
+   {
+   node->dataType = ERROR_TYPE;
+   }
+   traverseChildren = traverseChildren->rightSibling;
+   }
+   break;
+   case NUL_NODE:
+   break;
+   }
+   }
+   */
 
 void emitStatementList(AST * node){
   node = node->child;
@@ -353,7 +353,6 @@ void emitStatement(AST * stmtNode){
         emitFunctionCall(stmtNode);
         break;
       case RETURN_STMT:
-        /* TODO */
         emitReturnStmt(stmtNode);
         break;
     }
@@ -361,20 +360,21 @@ void emitStatement(AST * stmtNode){
 }
 
 void emitIfStmt(AST_NODE* ifNode){
-    AST_NODE* boolExpression = ifNode->child;
-    AST_NODE* ifBodyNode = boolExpression->rightSibling;
-    AST_NODE* elsePartNode = ifBodyNode->rightSibling;
-    // checkAssignOrExpr(boolExpression);
-    int wn = _const++;
-    fprintf(adotout, "_IF_%d:\n", wn);
-    int reg = emitExprRelatedNode(boolExpression);
-    fprintf(adotout, "cmp w%d, #0\n", reg);
-    fprintf(adotout, "beq _ELSE_%d\n", wn);
-    emitStatement(ifBodyNode);
-    fprintf(adotout, "b _END_IF_%d\n", wn);
-    fprintf(adotout, "_ELSE_%d:\n", wn);
-    emitStatement(elsePartNode);
-    fprintf(adotout, "_END_IF_%d:\n", wn);
+  AST_NODE* boolExpression = ifNode->child;
+  AST_NODE* ifBodyNode = boolExpression->rightSibling;
+  AST_NODE* elsePartNode = ifBodyNode->rightSibling;
+  // checkAssignOrExpr(boolExpression);
+  int wn = _const++;
+  fprintf(adotout, "_IF_%d:\n", wn);
+  int reg = emitExprRelatedNode(boolExpression);
+  /* TODO if boolExpression is a Assignment statement, it shall break*/
+  fprintf(adotout, "cmp w%d, #0\n", reg);
+  fprintf(adotout, "beq _ELSE_%d\n", wn);
+  emitStatement(ifBodyNode);
+  fprintf(adotout, "b _END_IF_%d\n", wn);
+  fprintf(adotout, "_ELSE_%d:\n", wn);
+  emitStatement(elsePartNode);
+  fprintf(adotout, "_END_IF_%d:\n", wn);
 }
 
 void emitWhileStmt(AST * whileNode){
@@ -384,6 +384,7 @@ void emitWhileStmt(AST * whileNode){
   int wn = _const++;
   fprintf(adotout, "_WHILE_%d:\n", wn);
   int reg = emitExprRelatedNode(boolExpression);
+  /* TODO if boolExpression is a Assignment statement, it shall break*/
   freeReg(reg);
   fprintf(adotout, "cmp w%d, #0\n", reg);
   fprintf(adotout, "beq _END_WHILE_%d\n", wn);
@@ -393,139 +394,139 @@ void emitWhileStmt(AST * whileNode){
 }
 
 void emitWriteFunction(AST_NODE* functionCallNode){
-    AST_NODE* functionIDNode = functionCallNode->child;
-    AST_NODE* actualParameterList = functionIDNode->rightSibling;
-    AST_NODE* actualParameter = actualParameterList->child;
+  AST_NODE* functionIDNode = functionCallNode->child;
+  AST_NODE* actualParameterList = functionIDNode->rightSibling;
+  AST_NODE* actualParameter = actualParameterList->child;
 
-    int reg = emitExprRelatedNode(actualParameter);
-    switch(actualParameter->dataType){
-      case INT_TYPE:
-        fprintf(adotout, "\tmov w0, w%d\n", reg);
-        fprintf(adotout, "\tbl _write_int\n");
-        break;
-      case FLOAT_TYPE:
-        fprintf(adotout, "\tfmov s0, s%d\n", reg);
-        fprintf(adotout, "\tbl _write_float\n");
-        break;
-      case CONST_STRING_TYPE:
-        fprintf(adotout, "\tmov x0, x%d\n", reg);
-        fprintf(adotout, "\tbl _write_str\n");
-        break;
-    }
-    freeReg(reg);
+  int reg = emitExprRelatedNode(actualParameter);
+  switch(actualParameter->dataType){
+    case INT_TYPE:
+      fprintf(adotout, "\tmov w0, w%d\n", reg);
+      fprintf(adotout, "\tbl _write_int\n");
+      break;
+    case FLOAT_TYPE:
+      fprintf(adotout, "\tfmov s0, s%d\n", reg);
+      fprintf(adotout, "\tbl _write_float\n");
+      break;
+    case CONST_STRING_TYPE:
+      fprintf(adotout, "\tmov x0, x%d\n", reg);
+      fprintf(adotout, "\tbl _write_str\n");
+      break;
+  }
+  freeReg(reg);
 
-    functionCallNode->dataType = VOID_TYPE;
+  functionCallNode->dataType = VOID_TYPE;
 }
 
 void emitFunctionCall(AST_NODE* functionCallNode){
-    AST_NODE* functionIDNode = functionCallNode->child;
+  AST_NODE* functionIDNode = functionCallNode->child;
 
-    //special case
-    if(strcmp(functionIDNode->semantic_value.identifierSemanticValue.identifierName, "write") == 0){
-        emitWriteFunction(functionCallNode);
-        return;
-    }
+  //special case
+  if(strcmp(functionIDNode->semantic_value.identifierSemanticValue.identifierName, "write") == 0){
+    emitWriteFunction(functionCallNode);
+    return;
+  }
 
-    /* TODO below */
+  /* TODO below */
 
-    SymbolTableEntry* symbolTableEntry = retrieveSymbol(functionIDNode->semantic_value.identifierSemanticValue.identifierName);
-    functionIDNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
+  SymbolTableEntry* symbolTableEntry = retrieveSymbol(functionIDNode->semantic_value.identifierSemanticValue.identifierName);
+  functionIDNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
 
-    AST_NODE* actualParameterList = functionIDNode->rightSibling;
-    processGeneralNode(actualParameterList);
+  AST_NODE* actualParameterList = functionIDNode->rightSibling;
+  processGeneralNode(actualParameterList);
 
-    AST_NODE* actualParameter = actualParameterList->child;
-    Parameter* formalParameter = symbolTableEntry->attribute->attr.functionSignature->parameterList;
+  AST_NODE* actualParameter = actualParameterList->child;
+  Parameter* formalParameter = symbolTableEntry->attribute->attr.functionSignature->parameterList;
 
-    int parameterPassingError = 0;
-    while(actualParameter && formalParameter)
+  int parameterPassingError = 0;
+  while(actualParameter && formalParameter)
+  {
+    if(actualParameter->dataType == ERROR_TYPE)
     {
-        if(actualParameter->dataType == ERROR_TYPE)
-        {
-            parameterPassingError = 1;
-        }
-        else
-        {
-            checkParameterPassing(formalParameter, actualParameter);
-            if(actualParameter->dataType == ERROR_TYPE)
-            {
-                parameterPassingError = 1;
-            }
-        }
-        actualParameter = actualParameter->rightSibling;
-        formalParameter = formalParameter->next;
+      parameterPassingError = 1;
     }
-    
-        functionCallNode->dataType = symbolTableEntry->attribute->attr.functionSignature->returnType;
+    else
+    {
+      checkParameterPassing(formalParameter, actualParameter);
+      if(actualParameter->dataType == ERROR_TYPE)
+      {
+        parameterPassingError = 1;
+      }
+    }
+    actualParameter = actualParameter->rightSibling;
+    formalParameter = formalParameter->next;
+  }
+
+  functionCallNode->dataType = symbolTableEntry->attribute->attr.functionSignature->returnType;
 }
 
 void emitAssignmentStmt(AST_NODE* assignmentNode)
 {
-    AST_NODE* idNode = assignmentNode->child;
-    AST_NODE* rightOp = idNode->rightSibling;
-    int resultReg = emitExprRelatedNode(rightOp);
-    SymbolTableEntry *symbolTableEntry = retrieveSymbol(idNode->semantic_value.identifierSemanticValue.identifierName);
-    idNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
-    TypeDescriptor *typeDescriptor = idNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor;
-    if(idNode->semantic_value.identifierSemanticValue.kind == NORMAL_ID){
-      idNode->dataType = typeDescriptor->properties.dataType;
-      if(symbolTableEntry->attribute->global){
-        int reg = getReg();
-        fprintf(adotout, "\tldr x%d, =_%s\n", reg, idName(idNode));
-        if(rightOp->dataType == INT_TYPE){
-          fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
-        }else{
-          fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
-        }
-        freeReg(reg);
-      }else{
-        int offset = symbolTableEntry->attribute->offset;
-        if(rightOp->dataType == INT_TYPE){
-          fprintf(adotout, "\tstr w%d, [x29, #%d]\n", resultReg, -offset);
-        }else{
-          fprintf(adotout, "\tstr s%d, [x29, #%d]\n", resultReg, -offset);
-        }
-      }
-    }else{
-      idNode->dataType = typeDescriptor->properties.arrayProperties.elementType;
-      int dimension = 0;
-      int * arrayDims = typeDescriptor->properties.arrayProperties.sizeInEachDimension;
-      AST_NODE *traverseDimList = idNode->child;
+  AST_NODE* idNode = assignmentNode->child;
+  AST_NODE* rightOp = idNode->rightSibling;
+  int resultReg = emitExprRelatedNode(rightOp);
+  SymbolTableEntry *symbolTableEntry = retrieveSymbol(idNode->semantic_value.identifierSemanticValue.identifierName);
+  idNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
+  TypeDescriptor *typeDescriptor = idNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor;
+  if(idNode->semantic_value.identifierSemanticValue.kind == NORMAL_ID){
+    idNode->dataType = typeDescriptor->properties.dataType;
+    if(symbolTableEntry->attribute->global){
       int reg = getReg();
-      fprintf(adotout, "\tmov x%d, #0\n", reg);
-      while(traverseDimList){
-        int indexReg = emitExprRelatedNode(traverseDimList);
-        int _reg = getReg();
-        int id = emitIntLiteral(arrayDims[dimension]);
-        fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
-        fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
-        fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
-        fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
-        freeReg(indexReg);
-        freeReg(_reg);
-        traverseDimList = traverseDimList->rightSibling;
-        ++dimension;
-      }
-      int offset = symbolTableEntry->attribute->offset;
-      int _reg = getReg();
-      if(symbolTableEntry->attribute->global){
-        fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
-      }else{
-        fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
-        int id = emitIntLiteral(-offset);
-        fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
-      }
-      fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
+      fprintf(adotout, "\tldr x%d, =_%s\n", reg, idName(idNode));
       if(rightOp->dataType == INT_TYPE){
         fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
       }else{
         fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
       }
-      freeReg(_reg);
       freeReg(reg);
+    }else{
+      int offset = symbolTableEntry->attribute->offset;
+      if(rightOp->dataType == INT_TYPE){
+        fprintf(adotout, "\tstr w%d, [x29, #%d]\n", resultReg, -offset);
+      }else{
+        fprintf(adotout, "\tstr s%d, [x29, #%d]\n", resultReg, -offset);
+      }
     }
-    freeReg(resultReg);
-    assignmentNode->dataType = getBiggerType(idNode->dataType, rightOp->dataType);
+  }else{
+    idNode->dataType = typeDescriptor->properties.arrayProperties.elementType;
+    int dimension = 0;
+    int * arrayDims = typeDescriptor->properties.arrayProperties.sizeInEachDimension;
+    AST_NODE *traverseDimList = idNode->child;
+    int reg = getReg();
+    fprintf(adotout, "\tmov x%d, #0\n", reg);
+    while(traverseDimList){
+      int indexReg = emitExprRelatedNode(traverseDimList);
+      int _reg = getReg();
+      int id = emitIntLiteral(arrayDims[dimension]);
+      fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
+      fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
+      fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
+      fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
+      freeReg(indexReg);
+      freeReg(_reg);
+      traverseDimList = traverseDimList->rightSibling;
+      ++dimension;
+    }
+    int offset = symbolTableEntry->attribute->offset;
+    int _reg = getReg();
+    if(symbolTableEntry->attribute->global){
+      fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
+    }else{
+      fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
+      int id = emitIntLiteral(-offset);
+      fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
+    }
+    fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
+    if(rightOp->dataType == INT_TYPE){
+      fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+    }else{
+      fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
+    }
+    freeReg(_reg);
+    freeReg(reg);
+  }
+  freeReg(resultReg);
+  assignmentNode->dataType = getBiggerType(idNode->dataType, rightOp->dataType);
 }
 
 int emitExprRelatedNode(AST_NODE* exprRelatedNode){
@@ -914,39 +915,39 @@ void emitFunctionDeclaration(AST * node){
 }
 
 void emitBlockNode(AST_NODE* blockNode){
-    openScope();
+  openScope();
 
-    AST_NODE *traverseListNode = blockNode->child;
-    int id = _const++;
-    fprintf(adotout, ".data\n");
-    fprintf(adotout, "_OLD_SP_%d: .skip 8\n", id);
-    fprintf(adotout, ".text\n");
-    int reg = getReg(), reg2 = getReg();
-    freeReg(reg);
-    freeReg(reg2);
-    fprintf(adotout, "ldr x%d, =_OLD_SP_%d\n", reg, id);
-    fprintf(adotout, "mov x%d, sp\n", reg2);
-    fprintf(adotout, "str x%d, [x%d, #0]\n", reg2, reg);
-    while(traverseListNode){
-      switch(traverseListNode->nodeType){
-        case VARIABLE_DECL_LIST_NODE:
-          emitLocalDeclarations(traverseListNode);
-          break;
-        case STMT_LIST_NODE:
-          emitStatementList(traverseListNode);
-          break;
-      }
-      traverseListNode = traverseListNode->rightSibling;
+  AST_NODE *traverseListNode = blockNode->child;
+  int id = _const++;
+  fprintf(adotout, ".data\n");
+  fprintf(adotout, "_OLD_SP_%d: .skip 8\n", id);
+  fprintf(adotout, ".text\n");
+  int reg = getReg(), reg2 = getReg();
+  freeReg(reg);
+  freeReg(reg2);
+  fprintf(adotout, "ldr x%d, =_OLD_SP_%d\n", reg, id);
+  fprintf(adotout, "mov x%d, sp\n", reg2);
+  fprintf(adotout, "str x%d, [x%d, #0]\n", reg2, reg);
+  while(traverseListNode){
+    switch(traverseListNode->nodeType){
+      case VARIABLE_DECL_LIST_NODE:
+        emitLocalDeclarations(traverseListNode);
+        break;
+      case STMT_LIST_NODE:
+        emitStatementList(traverseListNode);
+        break;
     }
-    reg = getReg();
-    reg2 = getReg();
-    freeReg(reg);
-    freeReg(reg2);
-    fprintf(adotout, "ldr x%d, =_OLD_SP_%d\n", reg, id);
-    fprintf(adotout, "ldr x%d, [x%d, #0]\n", reg2, reg);
-    fprintf(adotout, "mov sp, x%d\n", reg2);
+    traverseListNode = traverseListNode->rightSibling;
+  }
+  reg = getReg();
+  reg2 = getReg();
+  freeReg(reg);
+  freeReg(reg2);
+  fprintf(adotout, "ldr x%d, =_OLD_SP_%d\n", reg, id);
+  fprintf(adotout, "ldr x%d, [x%d, #0]\n", reg2, reg);
+  fprintf(adotout, "mov sp, x%d\n", reg2);
 
-    closeScope();
+  closeScope();
 }
 
 
