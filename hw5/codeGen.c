@@ -26,6 +26,9 @@ void emitGeneralNode(AST *);
 int emitExprNode(AST_NODE* exprNode);
 void emitWhileStmt(AST * stmtNode);
 void emitIfStmt(AST_NODE* ifNode);
+void emitReturnStmt(AST *);
+int emitIntLiteral(int);
+int emitFloatLiteral(float);
 
 void emitAlignment();
 char * idName(AST * node);
@@ -50,6 +53,22 @@ int getReg(){
 
 void freeReg(int reg){
   _regs[reg] = 0;
+}
+
+int emitIntLiteral(int i){
+  fprintf(adotout, ".data\n");
+  fprintf(adotout, "_const_%d: .word %d\n", _const, i);
+  emitAlignment();
+  fprintf(adotout, ".text\n");
+  return _const++;
+}
+
+int emitFloatLiteral(float f){
+  fprintf(adotout, ".data\n");
+  fprintf(adotout, "_const_%d: .float %f\n", _const, f);
+  emitAlignment();
+  fprintf(adotout, ".text\n");
+  return _const++;
 }
 
 void emitAlignment(){
@@ -334,7 +353,8 @@ void emitStatement(AST * stmtNode){
         emitFunctionCall(stmtNode);
         break;
       case RETURN_STMT:
-        checkReturnStmt(stmtNode);
+        /* TODO */
+        emitReturnStmt(stmtNode);
         break;
     }
   }
@@ -477,7 +497,8 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
       while(traverseDimList){
         int indexReg = emitExprRelatedNode(traverseDimList);
         int _reg = getReg();
-        fprintf(adotout, "\tmov x%d, #%d\n", _reg, arrayDims[dimension]);
+        int id = emitIntLiteral(arrayDims[dimension]);
+        fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
         fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
         fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
         fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
@@ -492,7 +513,8 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
         fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
       }else{
         fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
-        fprintf(adotout, "\tmov x%d, #%d\n", _reg, -offset);
+        int id = emitIntLiteral(-offset);
+        fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
       }
       fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
       if(rightOp->dataType == INT_TYPE){
@@ -554,7 +576,8 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           while(traverseDimList){
             int indexReg = emitExprRelatedNode(traverseDimList);
             int _reg = getReg();
-            fprintf(adotout, "\tmov x%d, #%d\n", _reg, arrayDims[dimension]);
+            int id = emitIntLiteral(arrayDims[dimension]);
+            fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
             fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
             fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
             fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
@@ -569,7 +592,8 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
             fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
           }else{
             fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
-            fprintf(adotout, "\tmov x%d, #%d\n", _reg, -offset);
+            int id = emitIntLiteral(-offset);
+            fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
           }
           fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
           if(idNode->dataType == INT_TYPE){
@@ -909,5 +933,40 @@ void emitEpilogue(){
   fprintf(adotout, "\tadd sp, x29, #8\n");
   fprintf(adotout, "\tldr x29, [x29, #0]\n");
   fprintf(adotout, "\tRET x30\n");
+}
+
+void emitReturnStmt(AST_NODE* returnNode){
+  AST_NODE* parentNode = returnNode->parent;
+  DATA_TYPE returnType = NONE_TYPE;
+  while(parentNode){
+    if(parentNode->nodeType == DECLARATION_NODE){
+      if(parentNode->semantic_value.declSemanticValue.kind == FUNCTION_DECL){
+        returnType = parentNode->child->dataType;
+      }
+      break;
+    }
+    parentNode = parentNode->parent;
+  }
+  returnNode->dataType = returnType;
+  int reg = emitExprRelatedNode(returnNode->child);
+  switch(returnType){
+    case VOID_TYPE:
+      break;
+    case INT_TYPE:
+      if(returnNode->child->dataType == INT_TYPE){
+        fprintf(adotout, "mov w0, w%d\n", reg);
+      }else{
+        /* TODO type conversion*/
+      }
+      break;
+    case FLOAT_TYPE:
+      if(returnNode->child->dataType == INT_TYPE){
+        /* TODO type conversion*/
+      }else{
+        fprintf(adotout, "fmov s0, s%d\n", reg);
+      }
+      break;
+  }
+  fprintf(adotout, "b _end_%s\n", idName(parentNode->child->rightSibling));
 }
 
