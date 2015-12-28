@@ -428,12 +428,10 @@ void emitFunctionCall(AST_NODE* functionCallNode){
     return;
   }
 
-  /* TODO below */
-
+  /* Only parameter-less proc call for this homework */
   SymbolTableEntry* symbolTableEntry = retrieveSymbol(functionIDNode->semantic_value.identifierSemanticValue.identifierName);
   functionIDNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
 
-  /* Only parameter-less proc call for this homework */
   if(strcmp(idName(functionIDNode), "read") == 0){
     // Another special case
     fprintf(adotout, "bl _read_int\n");
@@ -457,22 +455,26 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
   TypeDescriptor *typeDescriptor = idNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor;
   if(idNode->semantic_value.identifierSemanticValue.kind == NORMAL_ID){
     idNode->dataType = typeDescriptor->properties.dataType;
+    int reg = getReg();
+    freeReg(reg);
     if(symbolTableEntry->attribute->global){
-      int reg = getReg();
       fprintf(adotout, "\tldr x%d, =_%s\n", reg, idName(idNode));
-      if(rightOp->dataType == INT_TYPE){
-        fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
-      }else{
-        fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
-      }
-      freeReg(reg);
     }else{
       int offset = symbolTableEntry->attribute->offset;
-      if(rightOp->dataType == INT_TYPE){
-        fprintf(adotout, "\tstr w%d, [x29, #%d]\n", resultReg, -offset);
-      }else{
-        fprintf(adotout, "\tstr s%d, [x29, #%d]\n", resultReg, -offset);
+      int id = emitIntLiteral(offset);
+      fprintf(adotout, "ldr w%d, _const_%d\n", reg, id);
+      fprintf(adotout, "sub x%d, x29, x%d\n", reg, reg);
+    }
+    if(idNode->dataType == INT_TYPE){
+      if(rightOp->dataType == FLOAT_TYPE){
+        fprintf(adotout, "fcvtzs w%d, s%d\n", resultReg, resultReg);
       }
+      fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+    }else{
+      if(rightOp->dataType == INT_TYPE){
+        fprintf(adotout, "scvtf s%d, w%d\n", resultReg, resultReg);
+      }
+      fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
     }
   }else{
     idNode->dataType = typeDescriptor->properties.arrayProperties.elementType;
@@ -505,9 +507,15 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
       fprintf(adotout, "\tneg x%d, x%d\n", _reg, _reg);
     }
     fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
-    if(rightOp->dataType == INT_TYPE){
+    if(idNode->dataType == INT_TYPE){
+      if(rightOp->dataType == FLOAT_TYPE){
+        fprintf(adotout, "fcvtzs w%d, s%d\n", resultReg, resultReg);
+      }
       fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
     }else{
+      if(rightOp->dataType == INT_TYPE){
+        fprintf(adotout, "scvtf s%d, w%d\n", resultReg, resultReg);
+      }
       fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
     }
     freeReg(_reg);
@@ -561,10 +569,13 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
             }
           }else{
             int offset = symbolTableEntry->attribute->offset;
+            int id = emitIntLiteral(offset);
+            fprintf(adotout, "ldr w%d, _const_%d\n", reg, id);
+            fprintf(adotout, "sub x%d, x29, x%d\n", reg, reg);
             if(idNode->dataType == INT_TYPE){
-              fprintf(adotout, "\tldr w%d, [x29, #%d]\n", reg, -offset);
+              fprintf(adotout, "\tldr w%d, [x%d, #0]\n", reg, reg);
             }else{
-              fprintf(adotout, "\tldr s%d, [x29, #%d]\n", reg, -offset);
+              fprintf(adotout, "\tldr s%d, [x%d, #0]\n", reg, reg);
             }
           }
         }else{
@@ -658,18 +669,17 @@ int emitExprNode(AST_NODE* exprNode){
       ){
       evaluateExprValue(exprNode);
       exprNode->semantic_value.exprSemanticValue.isConstEval = 1;
+      int reg = getReg();
       fprintf(adotout, "\t.data\n");
       if(exprNode->dataType == INT_TYPE){
         fprintf(adotout, "\t_integer_const_%d: .word %d\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.iValue);
-      }else{
-        fprintf(adotout, "\t_float_const_%d: .float %f\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.fValue);
-      }
-      emitAlignment();
-      fprintf(adotout, "\t.text\n");
-      int reg = getReg();
-      if(exprNode->dataType == INT_TYPE){
+        emitAlignment();
+        fprintf(adotout, "\t.text\n");
         fprintf(adotout, "\tldr w%d, _integer_const_%d\n", reg, _const);
       }else{
+        fprintf(adotout, "\t_float_const_%d: .float %f\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.fValue);
+        emitAlignment();
+        fprintf(adotout, "\t.text\n");
         fprintf(adotout, "\tldr s%d, _float_const_%d\n", reg, _const);
       }
       ++_const;
@@ -692,6 +702,7 @@ int emitExprNode(AST_NODE* exprNode){
         fprintf(adotout, "ldr s%d, [sp, #0]\n", reg1);
       }
       if(leftOp->dataType == INT_TYPE && rightOp->dataType == INT_TYPE){
+        exprNode->dataType = INT_TYPE;
         switch(exprNode->semantic_value.exprSemanticValue.op.binaryOp){
           case BINARY_OP_ADD:
             fprintf(adotout, "\tadd w%d, w%d, w%d\n", reg1, reg1, reg2);
@@ -793,7 +804,121 @@ int emitExprNode(AST_NODE* exprNode){
         freeReg(reg2);
         return reg1;
       }else{
-        /* TODO insert type conversion instruction */
+        exprNode->dataType = FLOAT_TYPE;
+        if(leftOp->dataType == INT_TYPE){
+          fprintf(adotout, "scvtf s%d, w%d\n", reg1, reg1);
+        }
+        if(rightOp->dataType == INT_TYPE){
+          fprintf(adotout, "scvtf s%d, w%d\n", reg2, reg2);
+        }
+        switch(exprNode->semantic_value.exprSemanticValue.op.binaryOp){
+          case BINARY_OP_ADD:
+            fprintf(adotout, "\tfadd s%d, s%d, s%d\n", reg1, reg1, reg2);
+            break;
+          case BINARY_OP_SUB:
+            fprintf(adotout, "\tfsub s%d, s%d, s%d\n", reg1, reg1, reg2);
+            break;
+          case BINARY_OP_MUL:
+            fprintf(adotout, "\tfmul s%d, s%d, s%d\n", reg1, reg1, reg2);
+            break;
+          case BINARY_OP_DIV:
+            fprintf(adotout, "\tfdiv s%d, s%d, s%d\n", reg1, reg1, reg2);
+            break;
+          case BINARY_OP_EQ:
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
+            break;
+          case BINARY_OP_GE:
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "\tbge _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
+            break;
+          case BINARY_OP_LE:
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "\tble _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
+            break;
+          case BINARY_OP_NE:
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
+            break;
+          case BINARY_OP_GT:
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "\tbgt _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
+            break;
+          case BINARY_OP_LT:
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "\tblt _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
+            break;
+          case BINARY_OP_AND:
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "\tfcmp s%d, #0\n", reg1);
+            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
+            fprintf(adotout, "\tcmp s%d, #0\n", reg2);
+            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
+            break;
+          case BINARY_OP_OR:
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "\tfcmp s%d, #0\n", reg1);
+            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
+            fprintf(adotout, "\tcmp s%d, #0\n", reg2);
+            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
+            break;
+        }
+        freeReg(reg2);
+        return reg1;
       }
     }
   }else{
@@ -834,7 +959,14 @@ int emitExprNode(AST_NODE* exprNode){
             fprintf(adotout, "\tneg w%d, w%d", reg, reg);
             break;
           case UNARY_OP_LOGICAL_NEGATION:
-            fprintf(adotout, "\teor w%d, w%d, #1", reg, reg);
+            fprintf(adotout, "\tcmp w%d, #0\n", reg);
+            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
             break;
         }
       }else{
@@ -846,7 +978,16 @@ int emitExprNode(AST_NODE* exprNode){
             fprintf(adotout, "\tfneg s%d, s%d", reg, reg);
             break;
           case UNARY_OP_LOGICAL_NEGATION:
-            /* TODO type conversion */
+            exprNode->dataType = INT_TYPE;
+            fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
+            fprintf(adotout, "\tcmp w%d, #0\n", reg);
+            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
             break;
         }
       }
@@ -1027,12 +1168,14 @@ void emitReturnStmt(AST_NODE* returnNode){
       if(returnNode->child->dataType == INT_TYPE){
         fprintf(adotout, "mov w0, w%d\n", reg);
       }else{
-        /* TODO type conversion*/
+        fprintf(adotout, "fmov s0, s%d\n", reg);
+        fprintf(adotout, "fcvtzs w0, s0\n");
       }
       break;
     case FLOAT_TYPE:
       if(returnNode->child->dataType == INT_TYPE){
-        /* TODO type conversion*/
+        fprintf(adotout, "mov w0, w%d\n", reg);
+        fprintf(adotout, "scvtf s0, w0\n");
       }else{
         fprintf(adotout, "fmov s0, s%d\n", reg);
       }
