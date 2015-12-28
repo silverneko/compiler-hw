@@ -367,6 +367,7 @@ void emitIfStmt(AST_NODE* ifNode){
   int wn = _const++;
   fprintf(adotout, "_IF_%d:\n", wn);
   int reg = emitExprRelatedNode(boolExpression);
+  freeReg(reg);
   /* TODO if boolExpression is a Assignment statement, it shall break*/
   fprintf(adotout, "cmp w%d, #0\n", reg);
   fprintf(adotout, "beq _ELSE_%d\n", wn);
@@ -432,29 +433,15 @@ void emitFunctionCall(AST_NODE* functionCallNode){
   SymbolTableEntry* symbolTableEntry = retrieveSymbol(functionIDNode->semantic_value.identifierSemanticValue.identifierName);
   functionIDNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
 
-  AST_NODE* actualParameterList = functionIDNode->rightSibling;
-  processGeneralNode(actualParameterList);
-
-  AST_NODE* actualParameter = actualParameterList->child;
-  Parameter* formalParameter = symbolTableEntry->attribute->attr.functionSignature->parameterList;
-
-  int parameterPassingError = 0;
-  while(actualParameter && formalParameter)
-  {
-    if(actualParameter->dataType == ERROR_TYPE)
-    {
-      parameterPassingError = 1;
-    }
-    else
-    {
-      checkParameterPassing(formalParameter, actualParameter);
-      if(actualParameter->dataType == ERROR_TYPE)
-      {
-        parameterPassingError = 1;
-      }
-    }
-    actualParameter = actualParameter->rightSibling;
-    formalParameter = formalParameter->next;
+  /* Only parameter-less proc call for this homework */
+  if(strcmp(idName(functionIDNode), "read") == 0){
+    // Another special case
+    fprintf(adotout, "bl _read_int\n");
+  }else if(strcmp(idName(functionIDNode), "fread") == 0){
+    // Yet Another speCial Case
+    fprintf(adotout, "bl _read_float\n");
+  }else{
+    fprintf(adotout, "bl _start_%s\n", idName(functionIDNode));
   }
 
   functionCallNode->dataType = symbolTableEntry->attribute->attr.functionSignature->returnType;
@@ -513,8 +500,9 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
       fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
     }else{
       fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
-      int id = emitIntLiteral(-offset);
+      int id = emitIntLiteral(offset);
       fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
+      fprintf(adotout, "\tneg x%d, x%d\n", _reg, _reg);
     }
     fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
     if(rightOp->dataType == INT_TYPE){
@@ -541,8 +529,20 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
       break;
     case STMT_NODE:
       //function call
-      /* TODO */
-      checkFunctionCall(exprRelatedNode);
+      {
+        freeReg(reg);
+        emitFunctionCall(exprRelatedNode);
+        reg = getReg();
+        switch(exprRelatedNode->dataType){
+          case INT_TYPE:
+            fprintf(adotout, "mov w%d, w0\n", reg);
+            break;
+          case FLOAT_TYPE:
+            fprintf(adotout, "fmov s%d, s0\n", reg);
+            break;
+        }
+        return reg;
+      }
       break;
     case IDENTIFIER_NODE:
       // emitVariableRValue(exprRelatedNode);
@@ -592,8 +592,9 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
             fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
           }else{
             fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
-            int id = emitIntLiteral(-offset);
+            int id = emitIntLiteral(offset);
             fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
+            fprintf(adotout, "\tneg x%d, x%d\n", _reg, _reg);
           }
           freeReg(_reg);
           fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
@@ -765,10 +766,28 @@ int emitExprNode(AST_NODE* exprNode){
             ++_const;
             break;
           case BINARY_OP_AND:
-            fprintf(adotout, "\tand w%d, w%d, w%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "\tcmp w%d, #0\n", reg1);
+            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
+            fprintf(adotout, "\tcmp w%d, #0\n", reg2);
+            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
             break;
           case BINARY_OP_OR:
-            fprintf(adotout, "\toor w%d, w%d, w%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "\tcmp w%d, #0\n", reg1);
+            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
+            fprintf(adotout, "\tcmp w%d, #0\n", reg2);
+            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
+            fprintf(adotout, "\tmov w%d, #0\n", reg1);
+            fprintf(adotout, "\tb _END_%d\n", _const);
+            fprintf(adotout, "\t_ELSE_%d:\n", _const);
+            fprintf(adotout, "\tmov w%d, #1\n", reg1);
+            fprintf(adotout, "\t_END_%d:\n", _const);
+            ++_const;
             break;
         }
         freeReg(reg2);
@@ -836,7 +855,6 @@ int emitExprNode(AST_NODE* exprNode){
 
   }
 }
-
 
 void emitFunctionDeclaration(AST * node){
   AST * returnTypeNode = node->child;
