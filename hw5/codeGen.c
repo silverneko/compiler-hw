@@ -645,7 +645,7 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
         case STRINGC:
           exprRelatedNode->dataType = CONST_STRING_TYPE;
           fprintf(adotout, ".data\n");
-          fprintf(adotout, "_string_const_%d: .ascii %s\n", _const, exprRelatedNode->semantic_value.const1->const_u.sc);
+          fprintf(adotout, "_string_const_%d: .asciz %s\n", _const, exprRelatedNode->semantic_value.const1->const_u.sc);
           emitAlignment();
           fprintf(adotout, ".text\n");
           fprintf(adotout, "ldr x%d, =_string_const_%d\n", reg, _const);
