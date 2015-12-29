@@ -270,60 +270,6 @@ void emitGlobalDeclaration(AST * decl){
   }
 }
 
-/*
-   void emitGeneralNode(AST_NODE *node){
-   AST_NODE *traverseChildren = node->child;
-   switch(node->nodeType){
-   case VARIABLE_DECL_LIST_NODE:
-   while(traverseChildren)
-   {
-   processDeclarationNode(traverseChildren);
-   if(traverseChildren->dataType == ERROR_TYPE)
-   {
-   node->dataType = ERROR_TYPE;
-   }
-   traverseChildren = traverseChildren->rightSibling;
-   }
-   break;
-   case STMT_LIST_NODE:
-   while(traverseChildren)
-   {
-   processStmtNode(traverseChildren);
-   if(traverseChildren->dataType == ERROR_TYPE)
-   {
-   node->dataType = ERROR_TYPE;
-   }
-   traverseChildren = traverseChildren->rightSibling;
-   }
-   break;
-   case NONEMPTY_ASSIGN_EXPR_LIST_NODE:
-   while(traverseChildren)
-   {
-   checkAssignOrExpr(traverseChildren);
-   if(traverseChildren->dataType == ERROR_TYPE)
-   {
-   node->dataType = ERROR_TYPE;
-   }
-   traverseChildren = traverseChildren->rightSibling;
-   }
-   break;
-   case NONEMPTY_RELOP_EXPR_LIST_NODE:
-   while(traverseChildren)
-   {
-   processExprRelatedNode(traverseChildren);
-   if(traverseChildren->dataType == ERROR_TYPE)
-   {
-   node->dataType = ERROR_TYPE;
-   }
-   traverseChildren = traverseChildren->rightSibling;
-   }
-   break;
-   case NUL_NODE:
-   break;
-   }
-   }
-   */
-
 void emitStatementList(AST * node){
   node = node->child;
   while(node){
@@ -365,12 +311,18 @@ void emitIfStmt(AST_NODE* ifNode){
   AST_NODE* boolExpression = ifNode->child;
   AST_NODE* ifBodyNode = boolExpression->rightSibling;
   AST_NODE* elsePartNode = ifBodyNode->rightSibling;
-  // checkAssignOrExpr(boolExpression);
   int wn = _const++;
   fprintf(adotout, "_IF_%d:\n", wn);
+  if(boolExpression->nodeType == STMT_NODE
+      && boolExpression->semantic_value.stmtSemanticValue.kind == ASSIGN_STMT){
+    emitAssignmentStmt(boolExpression);
+    boolExpression = boolExpression->child;
+  }
   int reg = emitExprRelatedNode(boolExpression);
   freeReg(reg);
-  /* TODO if boolExpression is a Assignment statement, it shall break*/
+  if(boolExpression->dataType == FLOAT_TYPE){
+    fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
+  }
   fprintf(adotout, "cmp w%d, #0\n", reg);
   fprintf(adotout, "beq _ELSE_%d\n", wn);
   emitStatement(ifBodyNode);
@@ -383,12 +335,18 @@ void emitIfStmt(AST_NODE* ifNode){
 void emitWhileStmt(AST * whileNode){
   AST_NODE* boolExpression = whileNode->child;
   AST_NODE* bodyNode = boolExpression->rightSibling;
-  // checkAssignOrExpr(boolExpression);
   int wn = _const++;
   fprintf(adotout, "_WHILE_%d:\n", wn);
+  if(boolExpression->nodeType == STMT_NODE
+      && boolExpression->semantic_value.stmtSemanticValue.kind == ASSIGN_STMT){
+    emitAssignmentStmt(boolExpression);
+    boolExpression = boolExpression->child;
+  }
   int reg = emitExprRelatedNode(boolExpression);
-  /* TODO if boolExpression is a Assignment statement, it shall break*/
   freeReg(reg);
+  if(boolExpression->dataType == FLOAT_TYPE){
+    fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
+  }
   fprintf(adotout, "cmp w%d, #0\n", reg);
   fprintf(adotout, "beq _END_WHILE_%d\n", wn);
   emitStatement(bodyNode);
@@ -1114,7 +1072,6 @@ void emitBlockNode(AST_NODE* blockNode){
 
 
 void emitSaveArgs(int parametersCount){
-  /* TODO */
   /* hw5 only need to implement parameter less function */
 }
 

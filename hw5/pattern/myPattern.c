@@ -17,6 +17,7 @@ int MAIN(){
   int a;
   int b;
   int c;
+  float f;
   {
     int a, b, c;
     {
@@ -24,6 +25,26 @@ int MAIN(){
     }
   }
   veryLargeArray[10000] = 12;
+  if(a = 0){
+    write("wrong\n");
+  }else{
+    write("correct\n");
+  }
+  if(a = 1 - 3){
+    write("correct\n");
+  }else{
+    write("wrong\n");
+  }
+  if(a = 1.0 / 3.0){
+    write("wrong\n");
+  }else{
+    write("correct\n");
+  }
+  if(f = 1.0 / 3.0){
+    write("wrong\n");
+  }else{
+    write("correct\n");
+  }
   a = 10000000;
   write(a);
   write("\n");
