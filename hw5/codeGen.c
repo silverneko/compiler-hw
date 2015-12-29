@@ -41,6 +41,8 @@ FILE * adotout;
 int _const;
 int _regs[32];
 
+int _offset;
+
 int getReg(){
   for(int i = 19; i <= 29; ++i){
     if(!_regs[i]){
@@ -101,20 +103,19 @@ void emitProgramNode(AST_NODE * root){
 
 void emitLocalDeclarations(AST * root){
   AST * decls = root->child;
-  int offset = 0;
   while(decls){
-    offset += emitLocalDeclaration(decls, offset + 96);
+    _offset += emitLocalDeclaration(decls, _offset + 96);
     decls = decls->rightSibling;
   }
   fprintf(adotout, ".data\n");
-  fprintf(adotout, "\t_integer_const_%d: .word %d\n", _const, offset);
+  fprintf(adotout, "_integer_const_%d: .word %d\n", _const, _offset);
   emitAlignment();
   fprintf(adotout, ".text\n");
   int reg = getReg();
-  fprintf(adotout, "\tldr w%d, _integer_const_%d\n", reg, _const);
+  fprintf(adotout, "ldr w%d, _integer_const_%d\n", reg, _const);
   ++_const;
   freeReg(reg);
-  fprintf(adotout, "\tsub sp, sp, w%d\n", reg);
+  fprintf(adotout, "sub sp, sp, w%d\n", reg);
 }
 
 int emitLocalDeclaration(AST * decl, int _offset){
@@ -245,7 +246,7 @@ void emitGlobalDeclaration(AST * decl){
         }
         if(decl->semantic_value.declSemanticValue.kind == VARIABLE_DECL){
           if(attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR){
-            fprintf(adotout, "\t_%s: .word 0\n", idName(idlist));
+            fprintf(adotout, "_%s: .word 0\n", idName(idlist));
           }else{
             int arraySize = 4;
             int arrayDim = attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
@@ -253,7 +254,7 @@ void emitGlobalDeclaration(AST * decl){
             for(int i = 0; i < arrayDim; ++i){
               arraySize *= arrayDims[i];
             }
-            fprintf(adotout, "\t_%s: .skip %d\n", idName(idlist), arraySize);
+            fprintf(adotout, "_%s: .skip %d\n", idName(idlist), arraySize);
           }
         }
         attribute->global = 1;
@@ -402,16 +403,16 @@ void emitWriteFunction(AST_NODE* functionCallNode){
   int reg = emitExprRelatedNode(actualParameter);
   switch(actualParameter->dataType){
     case INT_TYPE:
-      fprintf(adotout, "\tmov w0, w%d\n", reg);
-      fprintf(adotout, "\tbl _write_int\n");
+      fprintf(adotout, "mov w0, w%d\n", reg);
+      fprintf(adotout, "bl _write_int\n");
       break;
     case FLOAT_TYPE:
-      fprintf(adotout, "\tfmov s0, s%d\n", reg);
-      fprintf(adotout, "\tbl _write_float\n");
+      fprintf(adotout, "fmov s0, s%d\n", reg);
+      fprintf(adotout, "bl _write_float\n");
       break;
     case CONST_STRING_TYPE:
-      fprintf(adotout, "\tmov x0, x%d\n", reg);
-      fprintf(adotout, "\tbl _write_str\n");
+      fprintf(adotout, "mov x0, x%d\n", reg);
+      fprintf(adotout, "bl _write_str\n");
       break;
   }
   freeReg(reg);
@@ -458,7 +459,7 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
     int reg = getReg();
     freeReg(reg);
     if(symbolTableEntry->attribute->global){
-      fprintf(adotout, "\tldr x%d, =_%s\n", reg, idName(idNode));
+      fprintf(adotout, "ldr x%d, =_%s\n", reg, idName(idNode));
     }else{
       int offset = symbolTableEntry->attribute->offset;
       int id = emitIntLiteral(offset);
@@ -469,12 +470,12 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
       if(rightOp->dataType == FLOAT_TYPE){
         fprintf(adotout, "fcvtzs w%d, s%d\n", resultReg, resultReg);
       }
-      fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+      fprintf(adotout, "str w%d, [x%d, #0]\n", resultReg, reg);
     }else{
       if(rightOp->dataType == INT_TYPE){
         fprintf(adotout, "scvtf s%d, w%d\n", resultReg, resultReg);
       }
-      fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
+      fprintf(adotout, "str s%d, [x%d, #0]\n", resultReg, reg);
     }
   }else{
     idNode->dataType = typeDescriptor->properties.arrayProperties.elementType;
@@ -482,15 +483,15 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
     int * arrayDims = typeDescriptor->properties.arrayProperties.sizeInEachDimension;
     AST_NODE *traverseDimList = idNode->child;
     int reg = getReg();
-    fprintf(adotout, "\tmov x%d, #0\n", reg);
+    fprintf(adotout, "mov x%d, #0\n", reg);
     while(traverseDimList){
       int indexReg = emitExprRelatedNode(traverseDimList);
       int _reg = getReg();
       int id = emitIntLiteral(arrayDims[dimension]);
-      fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
-      fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
-      fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
-      fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
+      fprintf(adotout, "ldr x%d, _const_%d\n", _reg, id);
+      fprintf(adotout, "mul x%d, x%d, x%d\n", reg, reg, _reg);
+      fprintf(adotout, "lsl x%d, x%d, #2\n", indexReg, indexReg);
+      fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, indexReg);
       freeReg(indexReg);
       freeReg(_reg);
       traverseDimList = traverseDimList->rightSibling;
@@ -499,24 +500,24 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
     int offset = symbolTableEntry->attribute->offset;
     int _reg = getReg();
     if(symbolTableEntry->attribute->global){
-      fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
+      fprintf(adotout, "ldr x%d, =_%s\n", _reg, idName(idNode));
     }else{
-      fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
+      fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, 29);
       int id = emitIntLiteral(offset);
-      fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
-      fprintf(adotout, "\tneg x%d, x%d\n", _reg, _reg);
+      fprintf(adotout, "ldr x%d, _const_%d\n", _reg, id);
+      fprintf(adotout, "neg x%d, x%d\n", _reg, _reg);
     }
-    fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
+    fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, _reg);
     if(idNode->dataType == INT_TYPE){
       if(rightOp->dataType == FLOAT_TYPE){
         fprintf(adotout, "fcvtzs w%d, s%d\n", resultReg, resultReg);
       }
-      fprintf(adotout, "\tstr w%d, [x%d, #0]\n", resultReg, reg);
+      fprintf(adotout, "str w%d, [x%d, #0]\n", resultReg, reg);
     }else{
       if(rightOp->dataType == INT_TYPE){
         fprintf(adotout, "scvtf s%d, w%d\n", resultReg, resultReg);
       }
-      fprintf(adotout, "\tstr s%d, [x%d, #0]\n", resultReg, reg);
+      fprintf(adotout, "str s%d, [x%d, #0]\n", resultReg, reg);
     }
     freeReg(_reg);
     freeReg(reg);
@@ -563,9 +564,9 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           idNode->dataType = typeDescriptor->properties.dataType;
           if(symbolTableEntry->attribute->global){
             if(idNode->dataType == INT_TYPE){
-              fprintf(adotout, "\tldr w%d, _%s\n", reg, idName(idNode));
+              fprintf(adotout, "ldr w%d, _%s\n", reg, idName(idNode));
             }else{
-              fprintf(adotout, "\tldr s%d, _%s\n", reg, idName(idNode));
+              fprintf(adotout, "ldr s%d, _%s\n", reg, idName(idNode));
             }
           }else{
             int offset = symbolTableEntry->attribute->offset;
@@ -573,9 +574,9 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
             fprintf(adotout, "ldr w%d, _const_%d\n", reg, id);
             fprintf(adotout, "sub x%d, x29, x%d\n", reg, reg);
             if(idNode->dataType == INT_TYPE){
-              fprintf(adotout, "\tldr w%d, [x%d, #0]\n", reg, reg);
+              fprintf(adotout, "ldr w%d, [x%d, #0]\n", reg, reg);
             }else{
-              fprintf(adotout, "\tldr s%d, [x%d, #0]\n", reg, reg);
+              fprintf(adotout, "ldr s%d, [x%d, #0]\n", reg, reg);
             }
           }
         }else{
@@ -583,16 +584,16 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           int dimension = 0;
           int * arrayDims = typeDescriptor->properties.arrayProperties.sizeInEachDimension;
           AST_NODE *traverseDimList = idNode->child;
-          fprintf(adotout, "\tmov x%d, #0\n", reg);
+          fprintf(adotout, "mov x%d, #0\n", reg);
           while(traverseDimList){
             int id = emitIntLiteral(arrayDims[dimension]);
             int _reg = getReg();
-            fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
-            fprintf(adotout, "\tmul x%d, x%d, x%d\n", reg, reg, _reg);
+            fprintf(adotout, "ldr x%d, _const_%d\n", _reg, id);
+            fprintf(adotout, "mul x%d, x%d, x%d\n", reg, reg, _reg);
             freeReg(_reg);
             int indexReg = emitExprRelatedNode(traverseDimList);
-            fprintf(adotout, "\tlsl x%d, x%d, #2\n", indexReg, indexReg);
-            fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, indexReg);
+            fprintf(adotout, "lsl x%d, x%d, #2\n", indexReg, indexReg);
+            fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, indexReg);
             freeReg(indexReg);
             traverseDimList = traverseDimList->rightSibling;
             ++dimension;
@@ -600,19 +601,19 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           int offset = symbolTableEntry->attribute->offset;
           int _reg = getReg();
           if(symbolTableEntry->attribute->global){
-            fprintf(adotout, "\tldr x%d, =_%s\n", _reg, idName(idNode));
+            fprintf(adotout, "ldr x%d, =_%s\n", _reg, idName(idNode));
           }else{
-            fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, 29);
+            fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, 29);
             int id = emitIntLiteral(offset);
-            fprintf(adotout, "\tldr x%d, _const_%d\n", _reg, id);
-            fprintf(adotout, "\tneg x%d, x%d\n", _reg, _reg);
+            fprintf(adotout, "ldr x%d, _const_%d\n", _reg, id);
+            fprintf(adotout, "neg x%d, x%d\n", _reg, _reg);
           }
           freeReg(_reg);
-          fprintf(adotout, "\tadd x%d, x%d, x%d\n", reg, reg, _reg);
+          fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, _reg);
           if(idNode->dataType == INT_TYPE){
-            fprintf(adotout, "\tldr w%d, [x%d, #0]\n", reg, reg);
+            fprintf(adotout, "ldr w%d, [x%d, #0]\n", reg, reg);
           }else{
-            fprintf(adotout, "\tldr s%d, [x%d, #0]\n", reg, reg);
+            fprintf(adotout, "ldr s%d, [x%d, #0]\n", reg, reg);
           }
         }
       }
@@ -670,17 +671,17 @@ int emitExprNode(AST_NODE* exprNode){
       evaluateExprValue(exprNode);
       exprNode->semantic_value.exprSemanticValue.isConstEval = 1;
       int reg = getReg();
-      fprintf(adotout, "\t.data\n");
+      fprintf(adotout, ".data\n");
       if(exprNode->dataType == INT_TYPE){
-        fprintf(adotout, "\t_integer_const_%d: .word %d\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.iValue);
+        fprintf(adotout, "_integer_const_%d: .word %d\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.iValue);
         emitAlignment();
-        fprintf(adotout, "\t.text\n");
-        fprintf(adotout, "\tldr w%d, _integer_const_%d\n", reg, _const);
+        fprintf(adotout, ".text\n");
+        fprintf(adotout, "ldr w%d, _integer_const_%d\n", reg, _const);
       }else{
-        fprintf(adotout, "\t_float_const_%d: .float %f\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.fValue);
+        fprintf(adotout, "_float_const_%d: .float %f\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.fValue);
         emitAlignment();
-        fprintf(adotout, "\t.text\n");
-        fprintf(adotout, "\tldr s%d, _float_const_%d\n", reg, _const);
+        fprintf(adotout, ".text\n");
+        fprintf(adotout, "ldr s%d, _float_const_%d\n", reg, _const);
       }
       ++_const;
       return reg;
@@ -705,99 +706,99 @@ int emitExprNode(AST_NODE* exprNode){
         exprNode->dataType = INT_TYPE;
         switch(exprNode->semantic_value.exprSemanticValue.op.binaryOp){
           case BINARY_OP_ADD:
-            fprintf(adotout, "\tadd w%d, w%d, w%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "add w%d, w%d, w%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_SUB:
-            fprintf(adotout, "\tsub w%d, w%d, w%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "sub w%d, w%d, w%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_MUL:
-            fprintf(adotout, "\tmul w%d, w%d, w%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "mul w%d, w%d, w%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_DIV:
-            fprintf(adotout, "\tdiv w%d, w%d, w%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "div w%d, w%d, w%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_EQ:
-            fprintf(adotout, "\tcmp w%d, w%d\n", reg1, reg2);
-            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, w%d\n", reg1, reg2);
+            fprintf(adotout, "beq _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_GE:
-            fprintf(adotout, "\tcmp w%d, w%d\n", reg1, reg2);
-            fprintf(adotout, "\tbge _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, w%d\n", reg1, reg2);
+            fprintf(adotout, "bge _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_LE:
-            fprintf(adotout, "\tcmp w%d, w%d\n", reg1, reg2);
-            fprintf(adotout, "\tble _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, w%d\n", reg1, reg2);
+            fprintf(adotout, "ble _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_NE:
-            fprintf(adotout, "\tcmp w%d, w%d\n", reg1, reg2);
-            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, w%d\n", reg1, reg2);
+            fprintf(adotout, "bne _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_GT:
-            fprintf(adotout, "\tcmp w%d, w%d\n", reg1, reg2);
-            fprintf(adotout, "\tbgt _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, w%d\n", reg1, reg2);
+            fprintf(adotout, "bgt _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_LT:
-            fprintf(adotout, "\tcmp w%d, w%d\n", reg1, reg2);
-            fprintf(adotout, "\tblt _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, w%d\n", reg1, reg2);
+            fprintf(adotout, "blt _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_AND:
-            fprintf(adotout, "\tcmp w%d, #0\n", reg1);
-            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
-            fprintf(adotout, "\tcmp w%d, #0\n", reg2);
-            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, #0\n", reg1);
+            fprintf(adotout, "beq _ELSE_%d\n", _const);
+            fprintf(adotout, "cmp w%d, #0\n", reg2);
+            fprintf(adotout, "beq _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_OR:
-            fprintf(adotout, "\tcmp w%d, #0\n", reg1);
-            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
-            fprintf(adotout, "\tcmp w%d, #0\n", reg2);
-            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, #0\n", reg1);
+            fprintf(adotout, "bne _ELSE_%d\n", _const);
+            fprintf(adotout, "cmp w%d, #0\n", reg2);
+            fprintf(adotout, "bne _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
         }
@@ -813,107 +814,107 @@ int emitExprNode(AST_NODE* exprNode){
         }
         switch(exprNode->semantic_value.exprSemanticValue.op.binaryOp){
           case BINARY_OP_ADD:
-            fprintf(adotout, "\tfadd s%d, s%d, s%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "fadd s%d, s%d, s%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_SUB:
-            fprintf(adotout, "\tfsub s%d, s%d, s%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "fsub s%d, s%d, s%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_MUL:
-            fprintf(adotout, "\tfmul s%d, s%d, s%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "fmul s%d, s%d, s%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_DIV:
-            fprintf(adotout, "\tfdiv s%d, s%d, s%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "fdiv s%d, s%d, s%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_EQ:
             exprNode->dataType = INT_TYPE;
-            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
-            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "fcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "beq _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_GE:
             exprNode->dataType = INT_TYPE;
-            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
-            fprintf(adotout, "\tbge _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "fcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "bge _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_LE:
             exprNode->dataType = INT_TYPE;
-            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
-            fprintf(adotout, "\tble _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "fcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "ble _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_NE:
             exprNode->dataType = INT_TYPE;
-            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
-            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "fcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "bne _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_GT:
             exprNode->dataType = INT_TYPE;
-            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
-            fprintf(adotout, "\tbgt _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "fcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "bgt _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_LT:
             exprNode->dataType = INT_TYPE;
-            fprintf(adotout, "\tfcmp s%d, s%d\n", reg1, reg2);
-            fprintf(adotout, "\tblt _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "fcmp s%d, s%d\n", reg1, reg2);
+            fprintf(adotout, "blt _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_AND:
             exprNode->dataType = INT_TYPE;
-            fprintf(adotout, "\tfcmp s%d, #0\n", reg1);
-            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
-            fprintf(adotout, "\tcmp s%d, #0\n", reg2);
-            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "fcmp s%d, #0\n", reg1);
+            fprintf(adotout, "beq _ELSE_%d\n", _const);
+            fprintf(adotout, "cmp s%d, #0\n", reg2);
+            fprintf(adotout, "beq _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
           case BINARY_OP_OR:
             exprNode->dataType = INT_TYPE;
-            fprintf(adotout, "\tfcmp s%d, #0\n", reg1);
-            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
-            fprintf(adotout, "\tcmp s%d, #0\n", reg2);
-            fprintf(adotout, "\tbne _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg1);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg1);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "fcmp s%d, #0\n", reg1);
+            fprintf(adotout, "bne _ELSE_%d\n", _const);
+            fprintf(adotout, "cmp s%d, #0\n", reg2);
+            fprintf(adotout, "bne _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg1);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg1);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
         }
@@ -932,19 +933,19 @@ int emitExprNode(AST_NODE* exprNode){
       ){
       evaluateExprValue(exprNode);
       exprNode->semantic_value.exprSemanticValue.isConstEval = 1;
-      fprintf(adotout, "\t.data\n");
+      fprintf(adotout, ".data\n");
       if(exprNode->dataType == INT_TYPE){
-        fprintf(adotout, "\t_integer_const_%d: .word %d\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.iValue);
+        fprintf(adotout, "_integer_const_%d: .word %d\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.iValue);
       }else{
-        fprintf(adotout, "\t_float_const_%d: .float %f\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.fValue);
+        fprintf(adotout, "_float_const_%d: .float %f\n", _const, exprNode->semantic_value.exprSemanticValue.constEvalValue.fValue);
       }
       emitAlignment();
-      fprintf(adotout, "\t.text\n");
+      fprintf(adotout, ".text\n");
       int reg = getReg();
       if(exprNode->dataType == INT_TYPE){
-        fprintf(adotout, "\tldr w%d, _integer_const_%d\n", reg, _const);
+        fprintf(adotout, "ldr w%d, _integer_const_%d\n", reg, _const);
       }else{
-        fprintf(adotout, "\tldr s%d, _float_const_%d\n", reg, _const);
+        fprintf(adotout, "ldr s%d, _float_const_%d\n", reg, _const);
       }
       ++_const;
       return reg;
@@ -956,16 +957,16 @@ int emitExprNode(AST_NODE* exprNode){
           case UNARY_OP_POSITIVE:
             break;
           case UNARY_OP_NEGATIVE:
-            fprintf(adotout, "\tneg w%d, w%d", reg, reg);
+            fprintf(adotout, "neg w%d, w%d", reg, reg);
             break;
           case UNARY_OP_LOGICAL_NEGATION:
-            fprintf(adotout, "\tcmp w%d, #0\n", reg);
-            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, #0\n", reg);
+            fprintf(adotout, "beq _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
         }
@@ -975,18 +976,18 @@ int emitExprNode(AST_NODE* exprNode){
           case UNARY_OP_POSITIVE:
             break;
           case UNARY_OP_NEGATIVE:
-            fprintf(adotout, "\tfneg s%d, s%d", reg, reg);
+            fprintf(adotout, "fneg s%d, s%d", reg, reg);
             break;
           case UNARY_OP_LOGICAL_NEGATION:
             exprNode->dataType = INT_TYPE;
             fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
-            fprintf(adotout, "\tcmp w%d, #0\n", reg);
-            fprintf(adotout, "\tbeq _ELSE_%d\n", _const);
-            fprintf(adotout, "\tmov w%d, #0\n", reg);
-            fprintf(adotout, "\tb _END_%d\n", _const);
-            fprintf(adotout, "\t_ELSE_%d:\n", _const);
-            fprintf(adotout, "\tmov w%d, #1\n", reg);
-            fprintf(adotout, "\t_END_%d:\n", _const);
+            fprintf(adotout, "cmp w%d, #0\n", reg);
+            fprintf(adotout, "beq _ELSE_%d\n", _const);
+            fprintf(adotout, "mov w%d, #0\n", reg);
+            fprintf(adotout, "b _END_%d\n", _const);
+            fprintf(adotout, "_ELSE_%d:\n", _const);
+            fprintf(adotout, "mov w%d, #1\n", reg);
+            fprintf(adotout, "_END_%d:\n", _const);
             ++_const;
             break;
         }
@@ -1117,34 +1118,35 @@ void emitSaveArgs(int parametersCount){
 }
 
 void emitPrologue(){
-  fprintf(adotout, "\tstr x30, [sp, #0]\n");
-  fprintf(adotout, "\tstr x29, [sp, #-8]\n");
-  fprintf(adotout, "\tadd x29, sp, #-8\n");
-  fprintf(adotout, "\tadd sp, sp, #-16\n");
+  fprintf(adotout, "str x30, [sp, #0]\n");
+  fprintf(adotout, "str x29, [sp, #-8]\n");
+  fprintf(adotout, "add x29, sp, #-8\n");
+  fprintf(adotout, "add sp, sp, #-16\n");
   int offset = 0;
   for(int i = 19; i <= 29; ++i){
-    fprintf(adotout, "\tstr x%d, [x29, #%d]\n", i, -8 - offset);
+    fprintf(adotout, "str x%d, [x29, #%d]\n", i, -8 - offset);
     offset += 8;
   }
   fprintf(adotout, ".data\n");
   fprintf(adotout, "_AR_SIZE_%d: .word %d\n", _const, offset);
   emitAlignment();
   fprintf(adotout, ".text\n");
-  fprintf(adotout, "\tldr w19, _AR_SIZE_%d\n", _const);
-  fprintf(adotout, "\tsub sp, sp, w19\n");
+  fprintf(adotout, "ldr w19, _AR_SIZE_%d\n", _const);
+  fprintf(adotout, "sub sp, sp, w19\n");
   ++_const;
+  _offset = 0;
 }
 
 void emitEpilogue(){
   int offset = 0;
   for(int i = 19; i <= 29; ++i){
-    fprintf(adotout, "\tldr x%d, [x29, #%d]\n", i, -8 - offset);
+    fprintf(adotout, "ldr x%d, [x29, #%d]\n", i, -8 - offset);
     offset += 8;
   }
-  fprintf(adotout, "\tldr x30, [x29, #8]\n");
-  fprintf(adotout, "\tadd sp, x29, #8\n");
-  fprintf(adotout, "\tldr x29, [x29, #0]\n");
-  fprintf(adotout, "\tRET x30\n");
+  fprintf(adotout, "ldr x30, [x29, #8]\n");
+  fprintf(adotout, "add sp, x29, #8\n");
+  fprintf(adotout, "ldr x29, [x29, #0]\n");
+  fprintf(adotout, "ret x30\n");
 }
 
 void emitReturnStmt(AST_NODE* returnNode){
