@@ -105,7 +105,7 @@ void emitLocalDeclarations(AST * root){
   AST * decls = root->child;
   int __offset = _offset;
   while(decls){
-    _offset += emitLocalDeclaration(decls, _offset + 96);
+    _offset += emitLocalDeclaration(decls, _offset + 88);
     decls = decls->rightSibling;
   }
   fprintf(adotout, ".data\n");
@@ -1125,11 +1125,11 @@ void emitPrologue(){
   fprintf(adotout, "add sp, sp, #-16\n");
   int offset = 0;
   for(int i = 19; i <= 29; ++i){
-    fprintf(adotout, "str x%d, [x29, #%d]\n", i, -8 - offset);
     offset += 8;
+    fprintf(adotout, "str x%d, [x29, #%d]\n", i, -offset);
   }
   fprintf(adotout, ".data\n");
-  fprintf(adotout, "_AR_SIZE_%d: .word %d\n", _const, offset+8);
+  fprintf(adotout, "_AR_SIZE_%d: .word %d\n", _const, offset);
   emitAlignment();
   fprintf(adotout, ".text\n");
   fprintf(adotout, "ldr w19, _AR_SIZE_%d\n", _const);
@@ -1141,8 +1141,8 @@ void emitPrologue(){
 void emitEpilogue(){
   int offset = 0;
   for(int i = 19; i <= 29; ++i){
-    fprintf(adotout, "ldr x%d, [x29, #%d]\n", i, -8 - offset);
     offset += 8;
+    fprintf(adotout, "ldr x%d, [x29, #%d]\n", i, -offset);
   }
   fprintf(adotout, "ldr x30, [x29, #8]\n");
   fprintf(adotout, "add sp, x29, #8\n");
