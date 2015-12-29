@@ -103,12 +103,13 @@ void emitProgramNode(AST_NODE * root){
 
 void emitLocalDeclarations(AST * root){
   AST * decls = root->child;
+  int __offset = _offset;
   while(decls){
     _offset += emitLocalDeclaration(decls, _offset + 96);
     decls = decls->rightSibling;
   }
   fprintf(adotout, ".data\n");
-  fprintf(adotout, "_integer_const_%d: .word %d\n", _const, _offset);
+  fprintf(adotout, "_integer_const_%d: .word %d\n", _const, _offset - __offset);
   emitAlignment();
   fprintf(adotout, ".text\n");
   int reg = getReg();
@@ -715,7 +716,7 @@ int emitExprNode(AST_NODE* exprNode){
             fprintf(adotout, "mul w%d, w%d, w%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_DIV:
-            fprintf(adotout, "div w%d, w%d, w%d\n", reg1, reg1, reg2);
+            fprintf(adotout, "sdiv w%d, w%d, w%d\n", reg1, reg1, reg2);
             break;
           case BINARY_OP_EQ:
             fprintf(adotout, "cmp w%d, w%d\n", reg1, reg2);
@@ -1128,7 +1129,7 @@ void emitPrologue(){
     offset += 8;
   }
   fprintf(adotout, ".data\n");
-  fprintf(adotout, "_AR_SIZE_%d: .word %d\n", _const, offset);
+  fprintf(adotout, "_AR_SIZE_%d: .word %d\n", _const, offset+8);
   emitAlignment();
   fprintf(adotout, ".text\n");
   fprintf(adotout, "ldr w19, _AR_SIZE_%d\n", _const);

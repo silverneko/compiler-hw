@@ -17,6 +17,12 @@ int MAIN(){
   int a;
   int b;
   int c;
+  {
+    int a, b, c;
+    {
+      int a, b, c;
+    }
+  }
   veryLargeArray[10000] = 12;
   a = 10000000;
   write(a);
@@ -37,8 +43,17 @@ int MAIN(){
     write("a > b\n");
   }else{
     write("a == b\n");
-    return 1;
   }
+  a = 14;
+  if(1.0 < 2.0){
+    int d, a;
+    write("A_A\n");
+    a = 12;
+    write(a);
+    write("\n");
+  }
+  write(a);
+  write("\n");
 
   write(a < b);
   write("while\n");
