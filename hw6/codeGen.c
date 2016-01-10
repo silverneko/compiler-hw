@@ -8,7 +8,7 @@ typedef AST_NODE AST;
 
 void emitCode(AST_NODE *);
 void emitProgramNode(AST_NODE *);
-void emitGlobalDeclarations(AST *);
+void emitGlobalDeclarations(AST *, int);
 void emitGlobalDeclaration(AST *);
 void emitFunctionDeclaration(AST *);
 void emitLocalDeclarations(AST *);
@@ -30,6 +30,7 @@ void emitReturnStmt(AST *);
 int emitIntLiteral(int);
 int emitFloatLiteral(float);
 void emitBlockNode(AST_NODE* blockNode);
+int emitVarDeclInitialization(AST * decl);
 
 void emitAlignment();
 char * idName(AST * node);
@@ -92,10 +93,18 @@ void emitProgramNode(AST_NODE * root){
   AST * decls = root->child;
   while(decls != NULL){
     if(decls->nodeType == VARIABLE_DECL_LIST_NODE){
-      emitGlobalDeclarations(decls);
+      emitGlobalDeclarations(decls, 0);
     }else{
       // function decl
       emitFunctionDeclaration(decls);
+    }
+    decls = decls->rightSibling;
+  }
+
+  decls = root->child;
+  while(decls != NULL){
+    if(decls->nodeType == VARIABLE_DECL_LIST_NODE){
+      emitGlobalDeclarations(decls, 1);
     }
     decls = decls->rightSibling;
   }
@@ -117,6 +126,69 @@ void emitLocalDeclarations(AST * root){
   ++_const;
   freeReg(reg);
   fprintf(adotout, "sub sp, sp, w%d\n", reg);
+
+  decls = root->child;
+  while(decls){
+    emitVarDeclInitialization(decls);
+    decls = decls->rightSibling;
+  }
+}
+
+int emitVarDeclInitialization(AST * decl){
+  AST * idlist = decl->child->rightSibling;
+  SymbolAttribute *attribute;
+  int reg, addrreg;
+
+  switch(decl->semantic_value.declSemanticValue.kind){
+    case VARIABLE_DECL:
+      while(idlist){
+        switch(idlist->semantic_value.identifierSemanticValue.kind){
+          case WITH_INIT_ID:
+	    reg = emitExprRelatedNode(idlist->child);
+	    attribute = idlist->semantic_value.identifierSemanticValue.symbolTableEntry->attribute;
+	  
+	    addrreg = getReg();
+	    if(attribute->global) {
+	      fprintf(adotout, "ldr x%d, =_%s\n", addrreg, idName(idlist));
+	    } else {
+	      fprintf(adotout, ".data\n");
+	      fprintf(adotout, "_const_%d: .word %d\n", _const, attribute->offset);
+	      emitAlignment();
+
+	      fprintf(adotout, ".text\n");
+	      fprintf(adotout, "ldr w%d, _const_%d\n", addrreg, _const);
+	      fprintf(adotout, "sub x%d, x29, x%d\n", addrreg, addrreg);
+
+	      _const++;
+	    }
+	    if(idlist->dataType == INT_TYPE) {
+	      if(idlist->child->dataType == FLOAT_TYPE) {
+		fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
+	      }
+	      fprintf(adotout, "str w%d, [x%d, #0]\n", reg, addrreg);
+	    } else {
+	      if(idlist->child->dataType == INT_TYPE) {
+		fprintf(adotout, "scvtf s%d, w%d\n", reg, reg);
+	      }
+	      fprintf(adotout, "str s%d, [x%d, #0]\n", reg, addrreg);
+	    }
+
+	    freeReg(addrreg);
+	    freeReg(reg);
+            break;
+	  default:
+	    break;
+	}
+        idlist = idlist->rightSibling;
+      }
+      break;
+
+    default:
+      fprintf(stderr, "emitVarDeclInitialization: switch case exhaust\n");
+      exit(1);
+  }
+
+  return 0;
 }
 
 int emitLocalDeclaration(AST * decl, int _offset){
@@ -176,6 +248,7 @@ int emitLocalDeclaration(AST * decl, int _offset){
             }
             offset += arraySize;
           }
+	  idlist->dataType = attribute->attr.typeDescriptor->properties.dataType;
         }
         attribute->global = 0;
         attribute->offset = _offset + offset;
@@ -191,14 +264,24 @@ int emitLocalDeclaration(AST * decl, int _offset){
   return offset;
 }
 
-void emitGlobalDeclarations(AST * root){
+void emitGlobalDeclarations(AST * root,int flag){
   AST * decls = root->child;
-  fprintf(adotout, ".data\n");
-  while(decls){
-    emitGlobalDeclaration(decls);
-    decls = decls->rightSibling;
+  if(flag == 0) {
+    fprintf(adotout, ".data\n");
+    while(decls){
+      emitGlobalDeclaration(decls);
+      decls = decls->rightSibling;
+    }
+    emitAlignment();
+  } else {
+    fprintf(adotout, ".text\n");
+    fprintf(adotout, "_global_init:\n");
+    while(decls){
+      emitVarDeclInitialization(decls);
+      decls = decls->rightSibling;
+    }
+    fprintf(adotout, "b _global_init_back\n");
   }
-  emitAlignment();
 }
 
 void emitGlobalDeclaration(AST * decl){
@@ -257,6 +340,7 @@ void emitGlobalDeclaration(AST * decl){
             }
             fprintf(adotout, "_%s: .skip %d\n", idName(idlist), arraySize);
           }
+	  idlist->dataType = attribute->attr.typeDescriptor->properties.dataType;
         }
         attribute->global = 1;
         idlist->semantic_value.identifierSemanticValue.symbolTableEntry =
@@ -1007,7 +1091,14 @@ void emitFunctionDeclaration(AST * node){
   /* Prologue start */
   fprintf(adotout, ".text\n");
   fprintf(adotout, "_start_%s:\n", idName(functionNameID));
+
+  if(strcmp(idName(functionNameID), "main") == 0 || strcmp(idName(functionNameID), "MAIN") == 0) {
+    fprintf(adotout, "b _global_init\n"); 
+    fprintf(adotout, "_global_init_back:\n");
+  }
+
   emitPrologue();
+
   // emitSaveArgs(parametersCount);
 
   AST_NODE *blockNode = parameterListNode->rightSibling;
