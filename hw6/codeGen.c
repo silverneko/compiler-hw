@@ -156,7 +156,7 @@ int emitVarDeclInitialization(AST * decl){
 	      emitAlignment();
 
 	      fprintf(adotout, ".text\n");
-	      fprintf(adotout, "ldr w%d, _const_%d\n", addrreg, _const);
+	      fprintf(adotout, "ldrsw x%d, _const_%d\n", addrreg, _const);
 	      fprintf(adotout, "sub x%d, x29, x%d\n", addrreg, addrreg);
 
 	      _const++;
@@ -474,6 +474,9 @@ void emitFunctionCall(AST_NODE* functionCallNode){
 
   /* Only parameter-less proc call for this homework */
   SymbolTableEntry* symbolTableEntry = retrieveSymbol(functionIDNode->semantic_value.identifierSemanticValue.identifierName);
+  SymbolAttribute *attribute = symbolTableEntry->attribute;
+  FunctionSignature *funcsig = attribute->attr.functionSignature;
+
   functionIDNode->semantic_value.identifierSemanticValue.symbolTableEntry = symbolTableEntry;
 
   if(strcmp(idName(functionIDNode), "read") == 0){
@@ -483,7 +486,71 @@ void emitFunctionCall(AST_NODE* functionCallNode){
     // Yet Another speCial Case
     fprintf(adotout, "bl _read_float\n");
   }else{
+    int i;
+    int sp_const;
+    int old_offset = _offset;
+    int reg;
+    Parameter *param;
+    AST_NODE *param_node = functionIDNode->rightSibling->child;
+
+    sp_const = _const;
+    ++_const;
+
+    fprintf(adotout, ".data\n");
+    fprintf(adotout, "_integer_const_%d: .word %d\n", sp_const, funcsig->parametersCount * 8);
+    emitAlignment();
+    fprintf(adotout, ".text\n");
+    reg = getReg();
+    fprintf(adotout, "ldr w%d, _integer_const_%d\n", reg, sp_const);
+    fprintf(adotout, "sub sp, sp, w%d\n", reg);
+    freeReg(reg);
+
+    _offset += funcsig->parametersCount * 8;
+
+    param = funcsig->parameterList;
+    for(i = 0;i < funcsig->parametersCount;i++) {
+      reg = emitExprRelatedNode(param_node);
+      int addrreg = getReg();
+
+      fprintf(adotout, ".data\n");
+      fprintf(adotout, "_const_%d: .word %d\n", _const, _offset - i * 8 + 88);
+      emitAlignment();
+      fprintf(adotout, ".text\n");
+      fprintf(adotout, "ldrsw x%d, _const_%d\n", addrreg, _const);
+      fprintf(adotout, "sub x%d, x29, x%d\n", addrreg, addrreg);
+
+      _const++;
+
+      if(param->type->kind == ARRAY_TYPE_DESCRIPTOR) {
+
+      }else if(param->type->properties.dataType == INT_TYPE) {
+	if(param_node->dataType == FLOAT_TYPE) {
+	  fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
+	}
+	fprintf(adotout, "str w%d, [x%d, #0]\n", reg, addrreg);
+      } else {
+	if(param_node->dataType == INT_TYPE) {
+	  fprintf(adotout, "scvtf s%d, w%d\n", reg, reg);
+	}
+	fprintf(adotout, "str s%d, [x%d, #0]\n", reg, addrreg);
+      }
+
+      freeReg(addrreg);
+      freeReg(reg);
+
+      param = param->next;
+      param_node = param_node->rightSibling;
+    }
+
     fprintf(adotout, "bl _start_%s\n", idName(functionIDNode));
+    
+    fprintf(adotout, ".text\n");
+    reg = getReg();
+    fprintf(adotout, "ldr w%d, _integer_const_%d\n", reg, sp_const);
+    fprintf(adotout, "add sp, sp, w%d\n", reg);
+    freeReg(reg);
+
+    _offset = old_offset;
   }
 
   functionCallNode->dataType = symbolTableEntry->attribute->attr.functionSignature->returnType;
@@ -506,7 +573,7 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
     }else{
       int offset = symbolTableEntry->attribute->offset;
       int id = emitIntLiteral(offset);
-      fprintf(adotout, "ldr w%d, _const_%d\n", reg, id);
+      fprintf(adotout, "ldrsw x%d, _const_%d\n", reg, id);
       fprintf(adotout, "sub x%d, x29, x%d\n", reg, reg);
     }
     if(idNode->dataType == INT_TYPE){
@@ -614,7 +681,7 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           }else{
             int offset = symbolTableEntry->attribute->offset;
             int id = emitIntLiteral(offset);
-            fprintf(adotout, "ldr w%d, _const_%d\n", reg, id);
+            fprintf(adotout, "ldrsw x%d, _const_%d\n", reg, id);
             fprintf(adotout, "sub x%d, x29, x%d\n", reg, reg);
             if(idNode->dataType == INT_TYPE){
               fprintf(adotout, "ldr w%d, [x%d, #0]\n", reg, reg);
@@ -1087,6 +1154,14 @@ void emitFunctionDeclaration(AST * node){
     traverseParameter = traverseParameter->rightSibling;
   }
   attribute->attr.functionSignature->parametersCount = parametersCount;
+
+  int i;
+  Parameter *parameter = attribute->attr.functionSignature->parameterList;
+  for(i = 0;i < parametersCount;i++) {
+    SymbolTableEntry* symentry = retrieveSymbol(parameter->parameterName);
+    symentry->attribute->offset = _offset - 16 - i * 8;
+    parameter = parameter->next;
+  }
 
   /* Prologue start */
   fprintf(adotout, ".text\n");
