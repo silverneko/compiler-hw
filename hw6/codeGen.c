@@ -522,7 +522,7 @@ void emitFunctionCall(AST_NODE* functionCallNode){
       _const++;
 
       if(param->type->kind == ARRAY_TYPE_DESCRIPTOR) {
-
+	//TODO array pointer
       }else if(param->type->properties.dataType == INT_TYPE) {
 	if(param_node->dataType == FLOAT_TYPE) {
 	  fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
