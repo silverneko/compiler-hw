@@ -217,11 +217,13 @@ int emitLocalDeclaration(AST * decl, int _offset){
             attribute->attr.typeDescriptor = malloc(sizeof(TypeDescriptor));
             processDeclDimList(idlist, attribute->attr.typeDescriptor, 0);
             if(typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR){
+	      attribute->attr.typeDescriptor->properties.arrayProperties.isPointer = 0;
               attribute->attr.typeDescriptor->properties.arrayProperties.elementType =
                 typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->properties.dataType;
             }else if(typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR){
               int typeArrayDimension = typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
               int idArrayDimension = attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
+	      attribute->attr.typeDescriptor->properties.arrayProperties.isPointer = 0;
               attribute->attr.typeDescriptor->properties.arrayProperties.elementType = 
                 typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->properties.arrayProperties.elementType;
               attribute->attr.typeDescriptor->properties.arrayProperties.dimension = 
@@ -309,11 +311,13 @@ void emitGlobalDeclaration(AST * decl){
             attribute->attr.typeDescriptor = malloc(sizeof(TypeDescriptor));
             processDeclDimList(idlist, attribute->attr.typeDescriptor, 0);
             if(typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR){
+	      attribute->attr.typeDescriptor->properties.arrayProperties.isPointer = 0;
               attribute->attr.typeDescriptor->properties.arrayProperties.elementType =
                 typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->properties.dataType;
             }else if(typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR){
               int typeArrayDimension = typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
               int idArrayDimension = attribute->attr.typeDescriptor->properties.arrayProperties.dimension;
+	      attribute->attr.typeDescriptor->properties.arrayProperties.isPointer = 0;
               attribute->attr.typeDescriptor->properties.arrayProperties.elementType = 
                 typeNode->semantic_value.identifierSemanticValue.symbolTableEntry->attribute->attr.typeDescriptor->properties.arrayProperties.elementType;
               attribute->attr.typeDescriptor->properties.arrayProperties.dimension = 
@@ -522,7 +526,7 @@ void emitFunctionCall(AST_NODE* functionCallNode){
       _const++;
 
       if(param->type->kind == ARRAY_TYPE_DESCRIPTOR) {
-	//TODO array pointer
+	fprintf(adotout, "str x%d, [x%d, #0]\n", reg, addrreg);
       }else if(param->type->properties.dataType == INT_TYPE) {
 	if(param_node->dataType == FLOAT_TYPE) {
 	  fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
@@ -612,10 +616,17 @@ void emitAssignmentStmt(AST_NODE* assignmentNode)
     if(symbolTableEntry->attribute->global){
       fprintf(adotout, "ldr x%d, =_%s\n", _reg, idName(idNode));
     }else{
-      fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, 29);
-      int id = emitIntLiteral(offset);
-      fprintf(adotout, "ldr x%d, _const_%d\n", _reg, id);
-      fprintf(adotout, "neg x%d, x%d\n", _reg, _reg);
+      if(typeDescriptor->properties.arrayProperties.isPointer) {
+	int id = emitIntLiteral(offset);
+	fprintf(adotout, "ldrsw x%d, _const_%d\n", _reg, id);
+	fprintf(adotout, "sub x%d, x29, x%d\n", _reg, _reg);
+	fprintf(adotout, "ldr x%d, [x%d, #0]\n", _reg, _reg);
+      } else {
+	fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, 29);
+	int id = emitIntLiteral(offset);
+	fprintf(adotout, "ldrsw x%d, _const_%d\n", _reg, id);
+	fprintf(adotout, "neg x%d, x%d\n", _reg, _reg);
+      }
     }
     fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, _reg);
     if(idNode->dataType == INT_TYPE){
@@ -713,18 +724,27 @@ int emitExprRelatedNode(AST_NODE* exprRelatedNode){
           if(symbolTableEntry->attribute->global){
             fprintf(adotout, "ldr x%d, =_%s\n", _reg, idName(idNode));
           }else{
-            fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, 29);
-            int id = emitIntLiteral(offset);
-            fprintf(adotout, "ldr x%d, _const_%d\n", _reg, id);
-            fprintf(adotout, "neg x%d, x%d\n", _reg, _reg);
+	    if(typeDescriptor->properties.arrayProperties.isPointer) {
+	      int id = emitIntLiteral(offset);
+	      fprintf(adotout, "ldrsw x%d, _const_%d\n", _reg, id);
+	      fprintf(adotout, "sub x%d, x29, x%d\n", _reg, _reg);
+	      fprintf(adotout, "ldr x%d, [x%d, #0]\n", _reg, _reg);
+	    } else {
+	      fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, 29);
+	      int id = emitIntLiteral(offset);
+	      fprintf(adotout, "ldrsw x%d, _const_%d\n", _reg, id);
+	      fprintf(adotout, "neg x%d, x%d\n", _reg, _reg);
+	    }
           }
           freeReg(_reg);
           fprintf(adotout, "add x%d, x%d, x%d\n", reg, reg, _reg);
-          if(idNode->dataType == INT_TYPE){
-            fprintf(adotout, "ldr w%d, [x%d, #0]\n", reg, reg);
-          }else{
-            fprintf(adotout, "ldr s%d, [x%d, #0]\n", reg, reg);
-          }
+	  if(dimension == typeDescriptor->properties.arrayProperties.dimension) {
+	    if(idNode->dataType == INT_TYPE){
+	      fprintf(adotout, "ldr w%d, [x%d, #0]\n", reg, reg);
+	    }else{
+	      fprintf(adotout, "ldr s%d, [x%d, #0]\n", reg, reg);
+	    }
+	  }
         }
       }
       break;
@@ -1160,6 +1180,9 @@ void emitFunctionDeclaration(AST * node){
   for(i = 0;i < parametersCount;i++) {
     SymbolTableEntry* symentry = retrieveSymbol(parameter->parameterName);
     symentry->attribute->offset = _offset - 16 - i * 8;
+    if(symentry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR) {
+      symentry->attribute->attr.typeDescriptor->properties.arrayProperties.isPointer = 1;
+    }
     parameter = parameter->next;
   }
 

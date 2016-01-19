@@ -28,6 +28,7 @@ typedef enum TypeDescriptorKind
 
 typedef struct ArrayProperties
 {
+    int isPointer;
     int dimension;
     int sizeInEachDimension[MAX_ARRAY_DIMENSION];
     //point to a TypeDescriptor in the symbol table;
