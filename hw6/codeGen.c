@@ -531,7 +531,7 @@ void emitFunctionCall(AST_NODE* functionCallNode){
     ++_const;
 
     fprintf(adotout, ".data\n");
-    fprintf(adotout, "_integer_const_%d: .word %d\n", sp_const, funcsig->parametersCount * 8);
+    fprintf(adotout, "_integer_const_%d: .word %d\n", sp_const, funcsig->parametersCount * 8 + 8);
     emitAlignment();
     fprintf(adotout, ".text\n");
     reg = getReg();
