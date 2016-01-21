@@ -1205,17 +1205,6 @@ void emitFunctionDeclaration(AST * node){
   }
   attribute->attr.functionSignature->parametersCount = parametersCount;
 
-  int i;
-  Parameter *parameter = attribute->attr.functionSignature->parameterList;
-  for(i = 0;i < parametersCount;i++) {
-    SymbolTableEntry* symentry = retrieveSymbol(parameter->parameterName);
-    symentry->attribute->offset = _offset - 16 - i * 8;
-    if(symentry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR) {
-      symentry->attribute->attr.typeDescriptor->properties.arrayProperties.isPointer = 1;
-    }
-    parameter = parameter->next;
-  }
-
   /* Prologue start */
   fprintf(adotout, ".text\n");
   fprintf(adotout, "_start_%s:\n", idName(functionNameID));
@@ -1226,6 +1215,17 @@ void emitFunctionDeclaration(AST * node){
   }
 
   emitPrologue();
+
+  int i;
+  Parameter *parameter = attribute->attr.functionSignature->parameterList;
+  for(i = 0;i < parametersCount;i++) {
+    SymbolTableEntry* symentry = retrieveSymbol(parameter->parameterName);
+    symentry->attribute->offset = _offset - 16 - i * 8;
+    if(symentry->attribute->attr.typeDescriptor->kind == ARRAY_TYPE_DESCRIPTOR) {
+      symentry->attribute->attr.typeDescriptor->properties.arrayProperties.isPointer = 1;
+    }
+    parameter = parameter->next;
+  }
 
   // emitSaveArgs(parametersCount);
 
