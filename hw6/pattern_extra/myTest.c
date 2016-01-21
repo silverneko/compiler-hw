@@ -30,5 +30,7 @@ int MAIN(){
   }else{
     write("wrongn\n");
   }
-
+  if(one() || (two() / zero())){
+    write("correct: 1\n");
+  }
 }
