@@ -25,6 +25,7 @@ void emitWriteFunction(AST *);
 void emitGeneralNode(AST *);
 int emitExprNode(AST_NODE* exprNode);
 void emitWhileStmt(AST * stmtNode);
+void emitForStmt(AST * stmtNode);
 void emitIfStmt(AST_NODE* ifNode);
 void emitReturnStmt(AST *);
 int emitIntLiteral(int);
@@ -101,6 +102,8 @@ void emitProgramNode(AST_NODE * root){
     decls = decls->rightSibling;
   }
 
+  fprintf(adotout, ".text\n");
+  fprintf(adotout, "_global_init:\n");
   decls = root->child;
   while(decls != NULL){
     if(decls->nodeType == VARIABLE_DECL_LIST_NODE){
@@ -108,6 +111,7 @@ void emitProgramNode(AST_NODE * root){
     }
     decls = decls->rightSibling;
   }
+  fprintf(adotout, "b _global_init_back\n");
 }
 
 void emitLocalDeclarations(AST * root){
@@ -276,13 +280,10 @@ void emitGlobalDeclarations(AST * root,int flag){
     }
     emitAlignment();
   } else {
-    fprintf(adotout, ".text\n");
-    fprintf(adotout, "_global_init:\n");
     while(decls){
       emitVarDeclInitialization(decls);
       decls = decls->rightSibling;
     }
-    fprintf(adotout, "b _global_init_back\n");
   }
 }
 
@@ -377,7 +378,7 @@ void emitStatement(AST * stmtNode){
         emitWhileStmt(stmtNode);
         break;
       case FOR_STMT:
-        checkForStmt(stmtNode);
+        emitForStmt(stmtNode);
         break;
       case ASSIGN_STMT:
         emitAssignmentStmt(stmtNode);
@@ -440,6 +441,35 @@ void emitWhileStmt(AST * whileNode){
   emitStatement(bodyNode);
   fprintf(adotout, "b _WHILE_%d\n", wn);
   fprintf(adotout, "_END_WHILE_%d:\n", wn);
+}
+
+void emitForStmt(AST * forNode){
+  AST_NODE* initExpression = forNode->child;
+  AST_NODE* boolExpression = initExpression->rightSibling;
+  AST_NODE* loopExpression = boolExpression->rightSibling;
+  AST_NODE* bodyNode = loopExpression->rightSibling;
+  int wn = _const++;
+  fprintf(adotout, "_FOR_INIT_%d:\n", wn);
+  emitStatementList(initExpression);
+  fprintf(adotout, "_FOR_%d:\n", wn);
+  int reg;
+  AST * _boolExpression;
+  boolExpression = boolExpression->child;
+  while(boolExpression != NULL){
+    reg = emitExprRelatedNode(boolExpression);
+    freeReg(reg);
+    _boolExpression = boolExpression;
+    boolExpression = boolExpression->rightSibling;
+  }
+  if(_boolExpression->dataType == FLOAT_TYPE){
+    fprintf(adotout, "fcvtzs w%d, s%d\n", reg, reg);
+  }
+  fprintf(adotout, "cmp w%d, #0\n", reg);
+  fprintf(adotout, "beq _END_FOR_%d\n", wn);
+  emitStatement(bodyNode);
+  emitStatementList(loopExpression);
+  fprintf(adotout, "b _FOR_%d\n", wn);
+  fprintf(adotout, "_END_FOR_%d:\n", wn);
 }
 
 void emitWriteFunction(AST_NODE* functionCallNode){

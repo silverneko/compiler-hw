@@ -11,6 +11,7 @@ int MAIN()
       result = result + i;
     } 
   write(result);  
+  write("\n");  
   return 0; 
 }
 
