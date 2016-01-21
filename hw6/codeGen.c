@@ -547,11 +547,11 @@ void emitFunctionCall(AST_NODE* functionCallNode){
       int addrreg = getReg();
 
       fprintf(adotout, ".data\n");
-      fprintf(adotout, "_const_%d: .word %d\n", _const, _offset - i * 8 + 88);
+      fprintf(adotout, "_const_%d: .word %d\n", _const, i * 8 + 8);
       emitAlignment();
       fprintf(adotout, ".text\n");
       fprintf(adotout, "ldrsw x%d, _const_%d\n", addrreg, _const);
-      fprintf(adotout, "sub x%d, x29, x%d\n", addrreg, addrreg);
+      fprintf(adotout, "add x%d, sp, x%d\n", addrreg, addrreg);
 
       _const++;
 
